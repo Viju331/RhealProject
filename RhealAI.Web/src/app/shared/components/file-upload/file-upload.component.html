@@ -1,0 +1,115 @@
+<div class="file-upload-container">
+    <mat-tab-group class="upload-tabs">
+        <!-- Local Source Tab (ZIP or Folder) -->
+        <mat-tab label="Local Source">
+            <div class="tab-content">
+                <!-- Loading State -->
+                <div class="loading-state" *ngIf="isLoading">
+                    <mat-spinner diameter="60"></mat-spinner>
+                    <h3 class="loading-title">Loading files...</h3>
+                    <p class="loading-subtitle" *ngIf="fileCount > 0">Processing {{ fileCount }} files</p>
+                    <p class="loading-subtitle" *ngIf="fileCount === 0">Please wait while we process your selection</p>
+                </div>
+
+                <div class="local-source-area" *ngIf="!localSourceSelected && !isLoading">
+                    <mat-icon class="input-icon">source</mat-icon>
+                    <h3 class="input-title">Select ZIP File or Project Folder</h3>
+                    <p class="input-subtitle">Browse for a ZIP file or provide a folder path</p>
+
+                    <!-- Browse Buttons for ZIP Files -->
+                    <div class="browse-section">
+                        <input type="file" #zipInput (change)="onFileSelected($event)" accept=".zip" class="hidden"
+                            id="zip-input" />
+                        <button mat-raised-button color="primary" (click)="zipInput.click()" class="browse-button">
+                            <mat-icon>folder_zip</mat-icon>
+                            Browse ZIP File
+                        </button>
+                    </div>
+
+                    <div class="divider-section">
+                        <div class="divider-line"></div>
+                        <span class="divider-text">OR</span>
+                        <div class="divider-line"></div>
+                    </div>
+
+                    <!-- Folder Path Input -->
+                    <mat-form-field appearance="outline" class="full-width">
+                        <mat-label>Project Folder Path</mat-label>
+                        <input matInput [(ngModel)]="folderPath" placeholder="D:\MyProject" />
+                        <mat-hint>Enter the full path to your project folder</mat-hint>
+                    </mat-form-field>
+
+                    <button mat-raised-button color="primary" [disabled]="!folderPath.trim()"
+                        (click)="selectLocalSource()" class="action-button">
+                        <mat-icon>check_circle</mat-icon>
+                        Select Folder
+                    </button>
+
+                    <p class="upload-note">
+                        <mat-icon class="info-icon">info</mat-icon>
+                        Browse for a ZIP file or manually enter your project folder path (max 2 GB)
+                    </p>
+                </div>
+
+                <!-- Local Source Selected Confirmation -->
+                <div class="source-selected" *ngIf="localSourceSelected && !isLoading">
+                    <mat-icon class="source-icon success-icon">{{ isZipFile ? 'folder_zip' : 'folder' }}</mat-icon>
+                    <div class="source-details">
+                        <h4 class="source-title">{{ isZipFile ? 'ZIP File' : 'Folder' }} Selected</h4>
+                        <p class="source-path">{{ selectedSourceName }}</p>
+                        <p class="file-size" *ngIf="selectedFile">{{ getFileSize(selectedFile.size) }}</p>
+                        <p class="file-count" *ngIf="fileCount > 0">{{ fileCount }} files selected</p>
+                    </div>
+                    <button mat-icon-button (click)="clearSelection()" class="remove-button">
+                        <mat-icon>close</mat-icon>
+                    </button>
+                </div>
+            </div>
+        </mat-tab>
+
+        <!-- GitHub Repository Tab -->
+        <mat-tab label="GitHub Repository">
+            <div class="tab-content">
+                <div class="github-input-area" *ngIf="!githubSelected">
+                    <mat-icon class="input-icon github-icon">code</mat-icon>
+                    <h3 class="input-title">Clone from GitHub</h3>
+                    <p class="input-subtitle">Provide the repository URL and optional branch</p>
+
+                    <mat-form-field appearance="outline" class="full-width">
+                        <mat-label>GitHub Repository URL</mat-label>
+                        <input matInput [(ngModel)]="githubUrl" placeholder="https://github.com/username/repository" />
+                    </mat-form-field>
+
+                    <mat-form-field appearance="outline" class="full-width">
+                        <mat-label>Branch (Optional)</mat-label>
+                        <input matInput [(ngModel)]="githubBranch" placeholder="main" />
+                    </mat-form-field>
+
+                    <button mat-raised-button color="primary" [disabled]="!githubUrl.trim()" (click)="selectGitHub()"
+                        class="action-button">
+                        <mat-icon>download</mat-icon>
+                        Clone Repository
+                    </button>
+
+                    <p class="upload-note">
+                        <mat-icon class="info-icon">info</mat-icon>
+                        Repository will be cloned and analyzed automatically
+                    </p>
+                </div>
+
+                <!-- GitHub Selected Confirmation -->
+                <div class="source-selected" *ngIf="githubSelected">
+                    <mat-icon class="source-icon success-icon">check_circle</mat-icon>
+                    <div class="source-details">
+                        <h4 class="source-title">GitHub Repository</h4>
+                        <p class="source-path">{{ githubUrl }}</p>
+                        <p class="source-branch" *ngIf="githubBranch">Branch: {{ githubBranch }}</p>
+                    </div>
+                    <button mat-icon-button (click)="clearSelection()" class="remove-button">
+                        <mat-icon>close</mat-icon>
+                    </button>
+                </div>
+            </div>
+        </mat-tab>
+    </mat-tab-group>
+</div>

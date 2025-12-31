@@ -1,0 +1,7 @@
+.loading-container {
+    @apply flex flex-col items-center justify-center p-10 gap-5;
+}
+
+.loading-message {
+    @apply text-base text-gray-600 m-0 font-medium;
+}

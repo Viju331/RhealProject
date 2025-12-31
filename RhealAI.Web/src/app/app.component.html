@@ -1,0 +1,49 @@
+<div class="app-container">
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-content">
+      <div class="logo-section">
+        <mat-icon class="logo-icon">science</mat-icon>
+        <h1 class="logo-text">Rheal AI</h1>
+      </div>
+
+      <nav class="nav-menu">
+        <a *ngFor="let item of menuItems" [routerLink]="item.path" routerLinkActive="active" class="nav-link">
+          <mat-icon>{{ item.icon }}</mat-icon>
+          <span>{{ item.label }}</span>
+        </a>
+      </nav>
+
+      <div class="header-actions">
+        <button mat-icon-button class="action-button">
+          <mat-icon>notifications</mat-icon>
+        </button>
+        <button mat-icon-button class="action-button">
+          <mat-icon>settings</mat-icon>
+        </button>
+        <div class="user-avatar">
+          <mat-icon>account_circle</mat-icon>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="app-main">
+    <div class="content-wrapper">
+      <router-outlet></router-outlet>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <div class="footer-content">
+      <p>&copy; 2025 Rheal AI. AI-Powered Code Analysis Platform</p>
+      <div class="footer-links">
+        <a href="#">Documentation</a>
+        <a href="#">Support</a>
+        <a href="#">Privacy</a>
+      </div>
+    </div>
+  </footer>
+</div>

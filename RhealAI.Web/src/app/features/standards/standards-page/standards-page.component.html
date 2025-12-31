@@ -1,0 +1,87 @@
+<div class="standards-page" *ngIf="!isLoading;">
+    <div class="container">
+        <!-- Page Header -->
+        <div class="page-header-section">
+            <div>
+                <h1 class="page-header">Coding Standards</h1>
+                <p class="page-subtitle">Extracted and generated standards for your project</p>
+            </div>
+            <div class="header-actions">
+                <button mat-raised-button color="primary">
+                    <mat-icon>download</mat-icon>
+                    Export Standards
+                </button>
+            </div>
+        </div>
+
+        <!-- Standards Overview -->
+        <div class="stats-grid mb-8">
+            <div class="stat-box">
+                <mat-icon class="stat-icon existing">description</mat-icon>
+                <div class="stat-content">
+                    <div class="stat-value">{{ existingStandardsCount }}</div>
+                    <div class="stat-label">Existing Standards</div>
+                </div>
+            </div>
+
+            <div class="stat-box">
+                <mat-icon class="stat-icon generated">auto_awesome</mat-icon>
+                <div class="stat-content">
+                    <div class="stat-value">{{ generatedStandardsCount }}</div>
+
+                    <div class="stat-box">
+                        <mat-icon class="stat-icon category">category</mat-icon>
+                        <div class="stat-content">
+                            <div class="stat-value">{{ categories.length }}</div>
+                            <div class="stat-label">Categories</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Standards by Category -->
+                <div class="standards-content">
+                    <div *ngFor="let category of categories" class="category-section">
+                        <h2 class="category-title">
+                            <mat-icon>folder</mat-icon>
+                            {{ category }}
+                        </h2>
+
+                        <mat-accordion class="standards-accordion">
+                            <mat-expansion-panel *ngFor="let standard of categorizedStandards.get(category)"
+                                class="standard-panel">
+                                <mat-expansion-panel-header>
+                                    <mat-panel-title class="standard-title">
+                                        <div class="title-content">
+                                            <span>{{ standard.name }}</span>
+                                            <mat-chip class="source-chip" [class.existing]="standard.isFromExistingDocs"
+                                                [class.generated]="!standard.isFromExistingDocs">
+                                                {{ standard.isFromExistingDocs ? 'Existing' : 'AI Generated' }}
+                                            </mat-chip>
+                                        </div>
+                                    </mat-panel-title>
+                                </mat-expansion-panel-header>
+
+                                <div class="standard-content">
+                                    <p class="standard-description">{{ standard.description }}</p>
+                                    <div *ngIf="standard.sourceFile" class="source-info">
+                                        <mat-icon>source</mat-icon>
+                                        <span>Source: {{ standard.sourceFile }}</span>
+                                    </div>
+                                </div>
+                            </mat-expansion-panel>
+                        </mat-accordion>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div *ngIf="standards.length === 0" class="empty-state">
+                    <mat-icon class="empty-icon">description</mat-icon>
+                    <h3>No Standards Found</h3>
+                    <p>No coding standards were extracted or generated for this repository.</p>
+                </div>
+            </div>
+        </div>
+
+        <ng-template #loadingTemplate>
+            <app-loading-spinner message="Loading standards..."></app-loading-spinner>
+        </ng-template>

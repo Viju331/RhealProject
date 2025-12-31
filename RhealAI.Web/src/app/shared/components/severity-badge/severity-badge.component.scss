@@ -1,0 +1,23 @@
+.severity-badge {
+    @apply inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold;
+}
+
+.severity-critical {
+    @apply bg-red-600 text-white;
+}
+
+.severity-high {
+    @apply bg-orange-500 text-white;
+}
+
+.severity-medium {
+    @apply bg-yellow-400 text-gray-900;
+}
+
+.severity-low {
+    @apply bg-green-500 text-white;
+}
+
+.count-badge {
+    @apply bg-white bg-opacity-30 px-2 py-0.5 rounded-full text-xs font-bold;
+}

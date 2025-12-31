@@ -1,0 +1,194 @@
+.upload-page {
+    @apply py-12;
+}
+
+.hero-section {
+    @apply text-center mb-12;
+}
+
+.hero-icon {
+    @apply inline-flex items-center justify-center w-24 h-24 mb-6 rounded-full;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+
+    mat-icon {
+        @apply text-white;
+        font-size: 48px !important;
+        width: 48px !important;
+        height: 48px !important;
+    }
+}
+
+.upload-card {
+    @apply p-8 mb-12;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.progress-section {
+    @apply mt-8 p-6 bg-purple-50 rounded-lg;
+}
+
+.progress-title {
+    @apply text-lg font-semibold text-gray-800 mb-4;
+}
+
+.progress-text {
+    @apply text-sm text-gray-600 mt-2 text-center;
+}
+
+.batch-info {
+    @apply text-sm text-purple-600 mt-2 text-center font-medium;
+}
+
+.analysis-details {
+    @apply mt-4 mb-6;
+}
+
+.current-activity {
+    @apply flex items-center gap-3 p-4 bg-white rounded-lg shadow-sm border-l-4 border-purple-600;
+    animation: slideIn 0.3s ease-out;
+}
+
+.activity-icon {
+    @apply text-purple-600;
+    font-size: 24px !important;
+    width: 24px !important;
+    height: 24px !important;
+    animation: bounce 1s ease-in-out infinite;
+}
+
+.activity-text {
+    @apply text-sm text-gray-700 font-medium flex-1;
+}
+
+.analysis-steps {
+    @apply mt-6 space-y-3;
+}
+
+.step {
+    @apply flex items-center gap-3 text-gray-600 transition-all duration-300;
+
+    &.active {
+        @apply text-purple-600 font-medium;
+
+        .step-icon {
+            animation: pulse-slow 2s ease-in-out infinite;
+        }
+    }
+
+    &.completed {
+        @apply text-green-600;
+
+        .step-icon {
+            @apply text-green-600;
+        }
+    }
+}
+
+.step-icon {
+    @apply text-gray-400 transition-colors duration-300;
+
+    .step.active & {
+        @apply text-purple-600;
+    }
+
+    .step.completed & {
+        @apply text-green-600;
+    }
+}
+
+.action-section {
+    @apply mt-8 text-center;
+}
+
+.upload-button {
+    @apply px-8 py-3 text-lg;
+
+    mat-icon {
+        margin-right: 8px;
+    }
+}
+
+.features-grid {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6;
+}
+
+.feature-card {
+    @apply bg-white rounded-xl p-6 text-center shadow-card transition-all duration-300;
+
+    &:hover {
+        @apply -translate-y-1 shadow-card-hover;
+    }
+}
+
+.feature-icon {
+    @apply w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center;
+
+    mat-icon {
+        @apply text-white;
+        font-size: 32px !important;
+        width: 32px !important;
+        height: 32px !important;
+    }
+}
+
+.bug-icon {
+    @apply bg-gradient-to-br from-red-500 to-red-700;
+}
+
+.violation-icon {
+    @apply bg-gradient-to-br from-orange-500 to-orange-700;
+}
+
+.standards-icon {
+    @apply bg-gradient-to-br from-blue-500 to-blue-700;
+}
+
+.report-icon {
+    @apply bg-gradient-to-br from-purple-500 to-purple-700;
+}
+
+.feature-card h3 {
+    @apply text-lg font-bold text-gray-800 mb-2;
+}
+
+.feature-card p {
+    @apply text-sm text-gray-600;
+}
+
+@keyframes pulse-slow {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes bounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-3px);
+    }
+}

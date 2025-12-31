@@ -1,0 +1,128 @@
+<div class="report-page" *ngIf="!isLoading && report; else loading">
+    <div class="container">
+        <!-- Page Header -->
+        <div class="page-header-section">
+            <div>
+                <h1 class="page-header">Analysis Report</h1>
+                <p class="page-subtitle">Generated on {{ report.generatedDate | date:'medium' }}</p>
+            </div>
+            <div class="header-actions">
+                <button mat-raised-button (click)="exportReport('json')">
+                    <mat-icon>code</mat-icon>
+                    Export JSON
+                </button>
+                <button mat-raised-button color="primary" (click)="exportReport('pdf')">
+                    <mat-icon>picture_as_pdf</mat-icon>
+                    Export PDF
+                </button>
+            </div>
+        </div>
+
+        <!-- Report Summary -->
+        <div class="report-summary glass-card">
+            <h2 class="section-title">
+                <mat-icon>summarize</mat-icon>
+                Executive Summary
+            </h2>
+
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <div class="summary-label">Total Files Analyzed</div>
+                    <div class="summary-value">{{ report.totalFiles }}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">Total Violations</div>
+                    <div class="summary-value text-warning">{{ report.totalViolations }}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">Total Bugs</div>
+                    <div class="summary-value text-danger">{{ report.totalBugs }}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">Execution Time</div>
+                    <div class="summary-value text-success">{{ report.executionTime }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Severity Breakdown -->
+        <div class="severity-breakdown">
+            <div class="glass-card">
+                <h3 class="section-title">
+                    <mat-icon>analytics</mat-icon>
+                    Severity Breakdown
+                </h3>
+
+                <div class="breakdown-grid">
+                    <div class="breakdown-item">
+                        <app-severity-badge [severity]="SeverityLevel.Critical"
+                            [count]="report.violationsBySeverity.get(SeverityLevel.Critical) || 0"></app-severity-badge>
+                        <span class="breakdown-label">Critical Issues</span>
+                    </div>
+                    <div class="breakdown-item">
+                        <app-severity-badge [severity]="SeverityLevel.High"
+                            [count]="report.violationsBySeverity.get(SeverityLevel.High) || 0"></app-severity-badge>
+                        <span class="breakdown-label">High Priority</span>
+                    </div>
+                    <div class="breakdown-item">
+                        <app-severity-badge [severity]="SeverityLevel.Medium"
+                            [count]="report.violationsBySeverity.get(SeverityLevel.Medium) || 0"></app-severity-badge>
+                        <span class="breakdown-label">Medium Priority</span>
+                    </div>
+                    <div class="breakdown-item">
+                        <app-severity-badge [severity]="SeverityLevel.Low"
+                            [count]="report.violationsBySeverity.get(SeverityLevel.Low) || 0"></app-severity-badge>
+                        <span class="breakdown-label">Low Priority</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recommendations -->
+        <div class="recommendations glass-card">
+            <h2 class="section-title">
+                <mat-icon>lightbulb</mat-icon>
+                Recommendations
+            </h2>
+
+            <div class="recommendation-list">
+                <div class="recommendation-item">
+                    <div class="recommendation-icon critical">
+                        <mat-icon>priority_high</mat-icon>
+                    </div>
+                    <div class="recommendation-content">
+                        <h4>Address Critical Issues First</h4>
+                        <p>Focus on resolving {{ report.violationsBySeverity.get(SeverityLevel.Critical) || 0 }}
+                            critical violations
+                            that could impact system stability.</p>
+                    </div>
+                </div>
+
+                <div class="recommendation-item">
+                    <div class="recommendation-icon warning">
+                        <mat-icon>security</mat-icon>
+                    </div>
+                    <div class="recommendation-content">
+                        <h4>Review Security Violations</h4>
+                        <p>Security-related violations should be addressed immediately to prevent potential
+                            vulnerabilities.</p>
+                    </div>
+                </div>
+
+                <div class="recommendation-item">
+                    <div class="recommendation-icon info">
+                        <mat-icon>auto_fix_high</mat-icon>
+                    </div>
+                    <div class="recommendation-content">
+                        <h4>Implement Coding Standards</h4>
+                        <p>Adopt the generated coding standards to maintain consistency across the codebase.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<ng-template #loading>
+    <app-loading-spinner message="Loading report..."></app-loading-spinner>
+</ng-template>

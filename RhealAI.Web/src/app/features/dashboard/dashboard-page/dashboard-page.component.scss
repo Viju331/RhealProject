@@ -1,0 +1,254 @@
+.dashboard-page {
+    @apply py-12 min-h-screen bg-gradient-to-br from-gray-50 via-white to-purple-50;
+}
+
+.page-header-section {
+    @apply flex items-start justify-between mb-10 px-6;
+
+    h1 {
+        @apply text-4xl font-bold text-gray-900 mb-2;
+    }
+}
+
+.page-subtitle {
+    @apply text-lg text-gray-600 font-medium;
+}
+
+.header-actions {
+    @apply flex gap-3;
+
+    button {
+        @apply shadow-lg hover:shadow-xl transition-all duration-300;
+
+        mat-icon {
+            margin-right: 8px;
+        }
+    }
+}
+
+// Project Summary Card
+.project-summary-card {
+    @apply mb-10 mx-6 p-8 bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-200;
+}
+
+.project-summary-header {
+    @apply flex items-center gap-4 mb-8 pb-4 border-b-2 border-purple-300;
+
+    .summary-icon {
+        @apply text-purple-600 text-4xl;
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 36px !important;
+    }
+
+    .summary-title {
+        @apply text-3xl font-bold text-gray-900;
+    }
+}
+
+.project-summary-content {
+    @apply space-y-8;
+}
+
+.summary-section {
+    @apply space-y-4;
+
+    .summary-section-title {
+        @apply flex items-center gap-3 text-xl font-bold text-gray-800 mb-4;
+
+        mat-icon {
+            @apply text-purple-600;
+        }
+    }
+
+    .summary-text {
+        @apply text-gray-700 text-lg leading-relaxed bg-white/50 p-6 rounded-xl border border-purple-100;
+    }
+}
+
+.summary-grid {
+    @apply grid grid-cols-1 md:grid-cols-2 gap-6;
+}
+
+.summary-item {
+    @apply flex items-center gap-4 bg-white/70 p-6 rounded-xl border border-purple-100 hover:border-purple-300 hover:shadow-lg transition-all duration-300;
+
+    .item-icon {
+        @apply text-purple-600 text-3xl;
+        width: 32px !important;
+        height: 32px !important;
+        font-size: 32px !important;
+    }
+
+    .item-content {
+        @apply flex flex-col gap-1;
+
+        .item-label {
+            @apply text-sm font-semibold text-gray-500 uppercase tracking-wide;
+        }
+
+        .item-value {
+            @apply text-lg font-bold text-gray-900;
+        }
+    }
+}
+
+.features-chips {
+    @apply flex flex-wrap gap-3;
+
+    .feature-chip {
+        @apply flex items-center gap-2 bg-white px-5 py-3 rounded-full text-sm font-semibold text-gray-700 border-2 border-purple-200 hover:border-purple-400 hover:shadow-md transition-all duration-300;
+
+        mat-icon {
+            @apply text-green-600 text-xl;
+            width: 20px !important;
+            height: 20px !important;
+            font-size: 20px !important;
+        }
+    }
+}
+
+.components-list {
+    @apply flex flex-wrap gap-3;
+
+    .component-tag {
+        @apply bg-white px-4 py-2 rounded-lg text-sm font-semibold text-gray-700 border border-purple-200 hover:border-purple-400 hover:shadow-md transition-all duration-300;
+    }
+}
+
+.dependencies-list {
+    @apply flex flex-wrap gap-3;
+
+    .dependency-chip {
+        @apply bg-white px-4 py-2 rounded-lg text-sm font-semibold text-indigo-700 border border-indigo-200 hover:border-indigo-400 hover:shadow-md transition-all duration-300;
+    }
+}
+
+.stats-grid {
+    @apply grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-10 px-6;
+}
+
+.content-grid {
+    @apply grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10 px-6;
+}
+
+.severity-card {
+    @apply p-8 transition-all duration-300 hover:shadow-2xl;
+}
+
+.card-title {
+    @apply flex items-center gap-3 text-2xl font-bold text-gray-800 mb-8 pb-4 border-b-2 border-purple-100;
+
+    mat-icon {
+        @apply text-purple-600 text-3xl;
+        width: 32px !important;
+        height: 32px !important;
+        font-size: 32px !important;
+    }
+}
+
+.severity-list {
+    @apply space-y-6;
+}
+
+.severity-item {
+    @apply flex items-center gap-6;
+}
+
+.severity-bar {
+    @apply flex-1 h-10 bg-gray-100 rounded-full overflow-hidden shadow-inner;
+}
+
+.bar-fill {
+    @apply h-full transition-all duration-500 ease-out;
+
+    &.critical {
+        @apply bg-gradient-to-r from-red-500 to-red-600;
+    }
+
+    &.high {
+        @apply bg-gradient-to-r from-orange-400 to-orange-500;
+    }
+
+    &.medium {
+        @apply bg-gradient-to-r from-yellow-400 to-yellow-500;
+    }
+
+    &.low {
+        @apply bg-gradient-to-r from-green-400 to-green-500;
+    }
+}
+
+.details-tabs {
+    @apply mt-10 bg-white rounded-2xl shadow-2xl overflow-hidden;
+
+    ::ng-deep {
+        .mat-mdc-tab-labels {
+            @apply bg-gradient-to-r from-purple-50 to-indigo-50 px-6;
+        }
+
+        .mat-mdc-tab {
+            @apply min-w-[200px] font-semibold text-base;
+        }
+
+        .mat-mdc-tab-body-wrapper {
+            @apply p-8;
+        }
+    }
+}
+
+.tab-content {
+    @apply py-6;
+}
+
+.table-container {
+    @apply overflow-x-auto rounded-xl shadow-md;
+}
+
+.violations-table,
+.bugs-table {
+    @apply w-full bg-white;
+
+    th {
+        @apply bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-sm uppercase tracking-wider py-4 px-6;
+    }
+
+    td {
+        @apply py-5 px-6 border-b border-gray-100;
+    }
+
+    tr {
+        @apply transition-all duration-200;
+
+        &:hover {
+            @apply bg-purple-50 shadow-sm transform scale-[1.01];
+        }
+
+        &:last-child td {
+            @apply border-b-0;
+        }
+    }
+}
+
+// Add responsive padding
+@media (max-width: 768px) {
+    .page-header-section {
+        @apply flex-col gap-4 px-4;
+    }
+
+    .header-actions {
+        @apply flex-col w-full;
+
+        button {
+            @apply w-full;
+        }
+    }
+
+    .severity-item {
+        @apply flex-col items-start gap-3;
+    }
+
+    .severity-bar {
+        @apply w-full;
+    }
+}

@@ -1,0 +1,130 @@
+.report-page {
+    @apply py-8;
+}
+
+.page-header-section {
+    @apply flex items-center justify-between mb-8;
+}
+
+.header-actions {
+    @apply flex gap-4;
+
+    button mat-icon {
+        margin-right: 8px;
+    }
+}
+
+.report-summary {
+    @apply p-8 mb-8;
+}
+
+.section-title {
+    @apply flex items-center gap-3 text-2xl font-bold text-gray-800 mb-6;
+
+    mat-icon {
+        @apply text-purple-600;
+    }
+}
+
+.summary-grid {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6;
+}
+
+.summary-item {
+    @apply text-center p-4 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg;
+}
+
+.summary-label {
+    @apply text-sm text-gray-600 mb-2;
+}
+
+.summary-value {
+    @apply text-3xl font-bold text-gray-800;
+
+    &.text-warning {
+        @apply text-orange-600;
+    }
+
+    &.text-danger {
+        @apply text-red-600;
+    }
+
+    &.text-success {
+        @apply text-green-600;
+    }
+}
+
+.severity-breakdown {
+    @apply mb-8;
+
+    .glass-card {
+        @apply p-8;
+    }
+}
+
+.breakdown-grid {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6;
+}
+
+.breakdown-item {
+    @apply flex flex-col items-center gap-3 p-4 bg-white rounded-lg shadow-sm transition-all duration-300;
+
+    &:hover {
+        @apply -translate-y-1 shadow-card-hover;
+    }
+}
+
+.breakdown-label {
+    @apply text-sm font-medium text-gray-600;
+}
+
+.recommendations {
+    @apply p-8;
+}
+
+.recommendation-list {
+    @apply space-y-4;
+}
+
+.recommendation-item {
+    @apply flex items-start gap-4 p-4 bg-white rounded-lg shadow-sm transition-all duration-300;
+
+    &:hover {
+        @apply -translate-y-1 shadow-card-hover;
+    }
+}
+
+.recommendation-icon {
+    @apply w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0;
+
+    mat-icon {
+        @apply text-white;
+        font-size: 24px;
+        width: 24px;
+        height: 24px;
+    }
+
+    &.critical {
+        @apply bg-gradient-to-br from-red-500 to-red-700;
+    }
+
+    &.warning {
+        @apply bg-gradient-to-br from-orange-500 to-orange-700;
+    }
+
+    &.info {
+        @apply bg-gradient-to-br from-blue-500 to-blue-700;
+    }
+}
+
+.recommendation-content {
+    @apply flex-1;
+}
+
+.recommendation-content h4 {
+    @apply text-lg font-bold text-gray-800 mb-1;
+}
+
+.recommendation-content p {
+    @apply text-sm text-gray-600;
+}

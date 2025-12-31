@@ -1,0 +1,72 @@
+.stat-card {
+    @apply bg-white rounded-lg p-6 cursor-pointer transition-all duration-300 h-full shadow-card;
+
+    &:hover {
+        @apply -translate-y-1 shadow-card-hover;
+    }
+}
+
+.stat-content {
+    @apply flex items-center gap-5;
+}
+
+.stat-icon {
+    @apply w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0;
+
+    mat-icon {
+        @apply text-white;
+        font-size: 32px !important;
+        width: 32px !important;
+        height: 32px !important;
+    }
+}
+
+.stat-details {
+    @apply flex-1;
+}
+
+.stat-title {
+    @apply text-sm text-gray-600 font-medium mb-2;
+}
+
+.stat-value {
+    @apply text-3xl font-bold leading-none mb-2;
+}
+
+.stat-trend {
+    @apply flex items-center gap-1 text-sm font-semibold;
+
+    &.positive {
+        @apply text-green-600;
+    }
+
+    &.negative {
+        @apply text-red-600;
+    }
+
+    mat-icon {
+        font-size: 18px !important;
+        width: 18px !important;
+        height: 18px !important;
+    }
+}
+
+.stat-card-primary .stat-icon {
+    @apply bg-gradient-to-br from-purple-500 to-purple-700;
+}
+
+.stat-card-success .stat-icon {
+    @apply bg-gradient-to-br from-green-500 to-green-700;
+}
+
+.stat-card-warning .stat-icon {
+    @apply bg-gradient-to-br from-yellow-500 to-orange-500;
+}
+
+.stat-card-danger .stat-icon {
+    @apply bg-gradient-to-br from-red-500 to-red-700;
+}
+
+.stat-card-info .stat-icon {
+    @apply bg-gradient-to-br from-blue-500 to-cyan-600;
+}

@@ -1,0 +1,114 @@
+/* Global styles with Angular Material and Tailwind CSS */
+
+// Import Angular Material theming
+@use '@angular/material' as mat;
+
+// Include Angular Material core styles
+@include mat.core();
+
+// Create Material theme with default colors
+$my-primary: mat.m2-define-palette(mat.$m2-indigo-palette);
+$my-accent: mat.m2-define-palette(mat.$m2-pink-palette, A200, A100, A400);
+$my-warn: mat.m2-define-palette(mat.$m2-red-palette);
+
+// Create the theme object
+$my-theme: mat.m2-define-light-theme((
+  color: (
+    primary: $my-primary,
+    accent: $my-accent,
+    warn: $my-warn,
+  )
+));
+
+// Include theme styles for all components
+@include mat.all-component-themes($my-theme);
+
+// Import Google Fonts
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+
+// Import Tailwind CSS directives
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+// Base styles with Tailwind
+@layer base {
+  * {
+    @apply antialiased;
+  }
+  
+  html, body {
+    @apply h-full m-0 p-0;
+  }
+  
+  body {
+    @apply font-sans text-gray-900 bg-gray-50;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold;
+  }
+  
+  a {
+    @apply text-primary-600 hover:text-primary-700 transition-colors duration-200;
+  }
+}
+
+// Custom component styles
+@layer components {
+  .btn-primary {
+    @apply px-6 py-3 bg-primary-600 text-white rounded-lg font-medium
+           hover:bg-primary-700 focus:ring-4 focus:ring-primary-300
+           transition-all duration-300 shadow-md hover:shadow-lg;
+  }
+  
+  .btn-secondary {
+    @apply px-6 py-3 bg-accent-600 text-white rounded-lg font-medium
+           hover:bg-accent-700 focus:ring-4 focus:ring-accent-300
+           transition-all duration-300 shadow-md hover:shadow-lg;
+  }
+  
+  .card {
+    @apply bg-white rounded-xl shadow-lg p-6 border border-gray-200
+           hover:shadow-xl transition-all duration-300;
+  }
+  
+  .input-field {
+    @apply w-full px-4 py-3 border border-gray-300 rounded-lg
+           focus:ring-2 focus:ring-primary-500 focus:border-primary-500
+           transition-all duration-200;
+  }
+}
+
+// Utility classes
+@layer utilities {
+  .text-gradient-primary {
+    @apply bg-gradient-to-r from-primary-600 to-accent-600 bg-clip-text text-transparent;
+  }
+  
+  .bg-gradient-primary {
+    @apply bg-gradient-to-r from-primary-600 to-accent-600;
+  }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+}
+
+// Mobile-first responsive utilities
+@media (max-width: 640px) {
+  .card {
+    @apply p-4;
+  }
+  
+  .btn-primary,
+  .btn-secondary {
+    @apply w-full;
+  }
+}

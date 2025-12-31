@@ -1,0 +1,503 @@
+/* ========================================
+   RHEAL AI - GLOBAL THEME
+   Using Tailwind CSS for Complete Theming
+   Mobile-First Responsive Design
+   ======================================== */
+
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+/* Tailwind Base, Components, Utilities */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ========================================
+   BASE LAYER - Global Resets & Defaults
+   ======================================== */
+@layer base {
+    * {
+        @apply box-border m-0 p-0;
+    }
+
+    html {
+        @apply h-full scroll-smooth;
+    }
+
+    body {
+        @apply h-full m-0 font-sans antialiased;
+        @apply text-gray-900 leading-relaxed;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        background-attachment: fixed;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+        @apply w-2.5 h-2.5;
+    }
+
+    ::-webkit-scrollbar-track {
+        @apply bg-gray-100 rounded-lg;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        @apply rounded-lg;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%);
+    }
+
+    /* Typography */
+    h1 {
+        @apply text-4xl md:text-5xl font-bold mb-4;
+    }
+
+    h2 {
+        @apply text-3xl md:text-4xl font-bold mb-3;
+    }
+
+    h3 {
+        @apply text-2xl md:text-3xl font-semibold mb-3;
+    }
+
+    h4 {
+        @apply text-xl md:text-2xl font-semibold mb-2;
+    }
+
+    h5 {
+        @apply text-lg md:text-xl font-medium mb-2;
+    }
+
+    h6 {
+        @apply text-base md:text-lg font-medium mb-2;
+    }
+
+    p {
+        @apply mb-4;
+    }
+
+    a {
+        @apply text-primary-600 hover:text-primary-700 transition-colors;
+    }
+}
+
+/* ========================================
+   COMPONENTS LAYER - Reusable UI Elements
+   ======================================== */
+@layer components {
+
+    /* Container & Layout */
+    .container {
+        @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+    }
+
+    .page-wrapper {
+        @apply min-h-screen py-4 sm:py-6 lg:py-8;
+    }
+
+    .page-header {
+        @apply text-3xl sm:text-4xl lg:text-5xl font-bold mb-3;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    .page-subtitle {
+        @apply text-base sm:text-lg text-gray-600 mb-6 sm:mb-8;
+    }
+
+    /* Card Components */
+    .card {
+        @apply bg-white rounded-xl sm:rounded-2xl shadow-card p-4 sm:p-6 transition-all duration-300;
+    }
+
+    .card-hover {
+        @apply card hover:shadow-card-hover hover:-translate-y-1;
+    }
+
+    .glass-card {
+        @apply bg-white bg-opacity-80 backdrop-blur-lg rounded-xl sm:rounded-2xl shadow-xl;
+        @apply border border-white border-opacity-20 p-4 sm:p-6 lg:p-8;
+    }
+
+    .gradient-card {
+        @apply rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-purple-200;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    }
+
+    /* Button Components */
+    .btn {
+        @apply px-4 py-2 sm:px-6 sm:py-3 font-semibold rounded-lg;
+        @apply transition-all duration-300 inline-flex items-center justify-center;
+        @apply focus:outline-none focus:ring-2 focus:ring-offset-2;
+    }
+
+    .btn-primary {
+        @apply btn bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg;
+        @apply hover:from-purple-700 hover:to-indigo-700 hover:shadow-xl hover:-translate-y-0.5;
+        @apply focus:ring-purple-500;
+    }
+
+    .btn-secondary {
+        @apply btn bg-white text-purple-600 shadow-md border-2 border-purple-600;
+        @apply hover:bg-purple-50 hover:shadow-lg;
+        @apply focus:ring-purple-500;
+    }
+
+    .btn-ghost {
+        @apply btn bg-transparent text-gray-700;
+        @apply hover:bg-gray-100;
+        @apply focus:ring-gray-500;
+    }
+
+    .btn-danger {
+        @apply btn bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg;
+        @apply hover:from-red-700 hover:to-red-800 hover:shadow-xl hover:-translate-y-0.5;
+        @apply focus:ring-red-500;
+    }
+
+    .btn-success {
+        @apply btn bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg;
+        @apply hover:from-green-700 hover:to-green-800 hover:shadow-xl hover:-translate-y-0.5;
+        @apply focus:ring-green-500;
+    }
+
+    /* Badge Components */
+    .badge {
+        @apply inline-flex items-center px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium;
+    }
+
+    .badge-critical {
+        @apply badge bg-red-100 text-red-800 border border-red-200;
+    }
+
+    .badge-high {
+        @apply badge bg-orange-100 text-orange-800 border border-orange-200;
+    }
+
+    .badge-medium {
+        @apply badge bg-yellow-100 text-yellow-800 border border-yellow-200;
+    }
+
+    .badge-low {
+        @apply badge bg-blue-100 text-blue-800 border border-blue-200;
+    }
+
+    .badge-info {
+        @apply badge bg-blue-100 text-blue-800 border border-blue-200;
+    }
+
+    .badge-success {
+        @apply badge bg-green-100 text-green-800 border border-green-200;
+    }
+
+    .badge-warning {
+        @apply badge bg-yellow-100 text-yellow-800 border border-yellow-200;
+    }
+
+    .badge-danger {
+        @apply badge bg-red-100 text-red-800 border border-red-200;
+    }
+
+    /* Input Components */
+    .input {
+        @apply w-full px-3 py-2 sm:px-4 sm:py-3 border border-gray-300 rounded-lg;
+        @apply focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent;
+        @apply transition-all duration-300 text-sm sm:text-base;
+    }
+
+    .input-error {
+        @apply input border-red-500 focus:ring-red-500;
+    }
+
+    .input-success {
+        @apply input border-green-500 focus:ring-green-500;
+    }
+
+    /* Grid Layouts */
+    .stats-grid {
+        @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6;
+    }
+
+    .content-grid {
+        @apply grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8;
+    }
+
+    .feature-grid {
+        @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6;
+    }
+
+    /* Text Gradients */
+    .text-gradient-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    .text-gradient-success {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    .text-gradient-danger {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    .text-gradient-warning {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    /* Loading States */
+    .skeleton {
+        @apply bg-gray-200 animate-pulse rounded;
+    }
+
+    .spinner {
+        @apply inline-block w-8 h-8 border-4 border-gray-200 border-t-purple-600 rounded-full animate-spin;
+    }
+
+    /* Empty States */
+    .empty-state {
+        @apply text-center py-12 sm:py-16 lg:py-20;
+    }
+
+    .empty-state-icon {
+        @apply text-gray-400 text-5xl sm:text-6xl mb-4;
+    }
+
+    .empty-state-title {
+        @apply text-xl sm:text-2xl font-semibold text-gray-700 mb-2;
+    }
+
+    .empty-state-description {
+        @apply text-sm sm:text-base text-gray-500;
+    }
+}
+
+/* ========================================
+   UTILITIES LAYER - Helper Classes
+   ======================================== */
+@layer utilities {
+
+    /* Animations */
+    .animate-fade-in {
+        animation: fadeIn 0.5s ease-out;
+    }
+
+    .animate-slide-in {
+        animation: slideInRight 0.5s ease-out;
+    }
+
+    .animate-slide-up {
+        animation: slideUp 0.5s ease-out;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes slideInRight {
+        from {
+            opacity: 0;
+            transform: translateX(30px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    @keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Hover Effects */
+    .hover-lift {
+        @apply transition-all duration-300;
+    }
+
+    .hover-lift:hover {
+        @apply -translate-y-1 shadow-card-hover;
+    }
+
+    .hover-glow:hover {
+        @apply shadow-glow;
+    }
+
+    .hover-scale:hover {
+        @apply scale-105;
+    }
+
+    /* Responsive Text Sizes */
+    .text-responsive-xs {
+        @apply text-xs sm:text-sm;
+    }
+
+    .text-responsive-sm {
+        @apply text-sm sm:text-base;
+    }
+
+    .text-responsive-base {
+        @apply text-base sm:text-lg;
+    }
+
+    .text-responsive-lg {
+        @apply text-lg sm:text-xl lg:text-2xl;
+    }
+
+    .text-responsive-xl {
+        @apply text-xl sm:text-2xl lg:text-3xl;
+    }
+
+    .text-responsive-2xl {
+        @apply text-2xl sm:text-3xl lg:text-4xl;
+    }
+
+    /* Responsive Spacing */
+    .spacing-responsive {
+        @apply p-4 sm:p-6 lg:p-8;
+    }
+
+    .gap-responsive {
+        @apply gap-4 sm:gap-6 lg:gap-8;
+    }
+
+    /* Background Gradients */
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .bg-gradient-secondary {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .bg-gradient-success {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+
+    .bg-gradient-danger {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    }
+
+    .bg-gradient-warning {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    }
+
+    .bg-gradient-info {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    }
+
+    /* Glassmorphism */
+    .glass {
+        @apply bg-white bg-opacity-10 backdrop-blur-lg border border-white border-opacity-20;
+    }
+
+    .glass-dark {
+        @apply bg-gray-900 bg-opacity-30 backdrop-blur-lg border border-gray-700 border-opacity-30;
+    }
+
+    /* Shadows */
+    .shadow-responsive {
+        @apply shadow-md sm:shadow-lg lg:shadow-xl;
+    }
+
+    /* Truncate Text */
+    .truncate-2-lines {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .truncate-3-lines {
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    /* Dividers */
+    .divider {
+        @apply my-4 sm:my-6 lg:my-8 border-t border-gray-200;
+    }
+
+    .divider-vertical {
+        @apply mx-4 sm:mx-6 lg:mx-8 border-l border-gray-200;
+    }
+}
+
+/* ========================================
+   MOBILE RESPONSIVE BREAKPOINTS
+   sm: 640px
+   md: 768px
+   lg: 1024px
+   xl: 1280px
+   2xl: 1536px
+   ======================================== */
+
+/* Additional Mobile Optimizations */
+@media (max-width: 640px) {
+
+    /* Reduce padding on small screens */
+    .glass-card {
+        @apply p-4;
+    }
+
+    /* Stack navigation vertically */
+    .nav-menu {
+        @apply flex-col;
+    }
+
+    /* Full width buttons on mobile */
+    .btn-mobile-full {
+        @apply w-full;
+    }
+
+    /* Smaller font sizes for mobile */
+    .mobile-text-sm {
+        @apply text-sm;
+    }
+}
+
+/* Tablet Optimizations */
+@media (min-width: 641px) and (max-width: 1024px) {
+    .tablet-grid-2 {
+        @apply grid-cols-2;
+    }
+}
+
+/* Dark Mode Support (Optional) */
+@media (prefers-color-scheme: dark) {
+    .dark-mode-support {
+        @apply bg-gray-900 text-gray-100;
+    }
+}

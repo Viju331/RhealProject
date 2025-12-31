@@ -1,0 +1,9 @@
+<div class="card" [class]="'elevation-' + elevation">
+    <div class="card-header" *ngIf="title || subtitle">
+        <h3 class="card-title" *ngIf="title">{{ title }}</h3>
+        <p class="card-subtitle" *ngIf="subtitle">{{ subtitle }}</p>
+    </div>
+    <div class="card-content">
+        <ng-content></ng-content>
+    </div>
+</div>

@@ -1,0 +1,107 @@
+<div class="dialog-header">
+    <div class="header-content">
+        <mat-icon class="header-icon">auto_fix_high</mat-icon>
+        <div class="header-text">
+            <h2 mat-dialog-title>{{ data.title }}</h2>
+            <div class="header-meta">
+                <span class="file-location">
+                    <mat-icon>description</mat-icon>
+                    {{ data.fileName || data.filePath }}
+                </span>
+                <span class="line-number">
+                    <mat-icon>format_list_numbered</mat-icon>
+                    {{ getLineRangeDisplay() }}
+                </span>
+            </div>
+        </div>
+    </div>
+    <button mat-icon-button class="close-button" (click)="close()">
+        <mat-icon>close</mat-icon>
+    </button>
+</div>
+
+<mat-dialog-content class="dialog-content">
+    <!-- Priority and Type -->
+    <div class="meta-section">
+        <div class="meta-item">
+            <label>Priority:</label>
+            <app-severity-badge [severity]="severityLevel"></app-severity-badge>
+        </div>
+        <div class="meta-item">
+            <label>Type:</label>
+            <span class="refactoring-type-badge">{{ data.refactoringType }}</span>
+        </div>
+    </div>
+
+    <!-- Description -->
+    <div class="section">
+        <div class="section-header">
+            <mat-icon>info</mat-icon>
+            <h3>Description</h3>
+        </div>
+        <p class="description-text">{{ data.description }}</p>
+    </div>
+
+    <!-- Current Code -->
+    <div class="section">
+        <div class="section-header current">
+            <mat-icon>code</mat-icon>
+            <h3>Current Code</h3>
+            <span class="badge badge-warning">Needs Refactoring</span>
+        </div>
+        <div class="code-block current-code">
+            <pre><code>{{ data.currentCode }}</code></pre>
+        </div>
+    </div>
+
+    <!-- Suggested Code -->
+    <div class="section">
+        <div class="section-header suggested">
+            <mat-icon>check_circle</mat-icon>
+            <h3>Suggested Code</h3>
+            <span class="badge badge-success">Recommended</span>
+        </div>
+        <div class="code-block suggested-code">
+            <pre><code>{{ data.suggestedCode }}</code></pre>
+        </div>
+    </div>
+
+    <!-- Reason -->
+    <div class="section">
+        <div class="section-header">
+            <mat-icon>lightbulb</mat-icon>
+            <h3>Why Refactor?</h3>
+        </div>
+        <p class="reason-text">{{ data.reason }}</p>
+    </div>
+
+    <!-- Benefits -->
+    <div class="section">
+        <div class="section-header">
+            <mat-icon>star</mat-icon>
+            <h3>Benefits</h3>
+        </div>
+        <p class="benefits-text">{{ data.benefits }}</p>
+    </div>
+
+    <!-- Improvement Areas -->
+    <div class="section" *ngIf="data.improvementAreas && data.improvementAreas.length > 0">
+        <div class="section-header">
+            <mat-icon>trending_up</mat-icon>
+            <h3>Improvement Areas</h3>
+        </div>
+        <mat-chip-set class="improvement-chips">
+            <mat-chip *ngFor="let area of data.improvementAreas" class="improvement-chip">
+                {{ area }}
+            </mat-chip>
+        </mat-chip-set>
+    </div>
+</mat-dialog-content>
+
+<mat-dialog-actions class="dialog-actions">
+    <button mat-button (click)="close()">Close</button>
+    <button mat-raised-button color="primary" (click)="close()">
+        <mat-icon>done</mat-icon>
+        Got It
+    </button>
+</mat-dialog-actions>

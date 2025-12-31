@@ -1,0 +1,123 @@
+<div class="dialog-container">
+    <!-- Dialog Header -->
+    <div class="dialog-header" [class]="'header-' + getTypeColor()">
+        <div class="header-content">
+            <mat-icon class="header-icon">{{ getTypeIcon() }}</mat-icon>
+            <div class="header-info">
+                <h2 class="dialog-title">{{ data.title }}</h2>
+                <div class="file-info">
+                    <mat-icon class="file-icon">description</mat-icon>
+                    <span class="file-path">{{ data.filePath }}</span>
+                    <span class="line-number" *ngIf="data.lineNumber">
+                        <mat-icon>tag</mat-icon>
+                        {{ getLineRangeDisplay() }}
+                    </span>
+                </div>
+            </div>
+        </div>
+        <button mat-icon-button class="close-button" (click)="close()">
+            <mat-icon>close</mat-icon>
+        </button>
+    </div>
+
+    <!-- Severity Badge -->
+    <div class="severity-section" *ngIf="data.severity">
+        <app-severity-badge [severity]="data.severity"></app-severity-badge>
+        <span class="impact-label" *ngIf="data.impact">Impact: {{ data.impact }}</span>
+    </div>
+
+    <!-- Description -->
+    <div class="description-section">
+        <h3 class="section-title">
+            <mat-icon>description</mat-icon>
+            Description
+        </h3>
+        <p class="description-text">{{ data.description }}</p>
+    </div>
+
+    <!-- Two Column Layout: Current Code vs Suggestion -->
+    <div class="code-comparison">
+        <!-- Left Column: Current Code -->
+        <div class="code-column current-code">
+            <div class="column-header">
+                <mat-icon>code</mat-icon>
+                <h3>Current Code</h3>
+                <button mat-icon-button *ngIf="data.currentCode" (click)="copyCode(data.currentCode)"
+                    matTooltip="Copy code">
+                    <mat-icon>content_copy</mat-icon>
+                </button>
+            </div>
+            <div class="code-content">
+                <div class="line-numbers" *ngIf="data.currentCode">
+                    <div class="line-number" *ngFor="let line of data.currentCode.split('\n'); let i = index">
+                        {{ (data.lineNumber || 1) + i }}
+                    </div>
+                </div>
+                <pre class="code-block" *ngIf="data.currentCode">{{ data.currentCode }}</pre>
+                <div class="no-code" *ngIf="!data.currentCode">
+                    <mat-icon>code_off</mat-icon>
+                    <p>No current code available</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Divider -->
+        <div class="column-divider">
+            <mat-icon>arrow_forward</mat-icon>
+        </div>
+
+        <!-- Right Column: Suggestion -->
+        <div class="code-column suggestion-code">
+            <div class="column-header">
+                <mat-icon>lightbulb</mat-icon>
+                <h3>Suggested Changes</h3>
+                <button mat-icon-button (click)="copyCode(data.suggestion)" matTooltip="Copy suggestion">
+                    <mat-icon>content_copy</mat-icon>
+                </button>
+            </div>
+            <div class="code-content">
+                <div class="suggestion-text" [innerHTML]="data.suggestion"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reproduction Steps (for bugs) -->
+    <div class="reproduction-section" *ngIf="data.reproductionSteps && data.reproductionSteps.length > 0">
+        <h3 class="section-title">
+            <mat-icon>list</mat-icon>
+            Reproduction Steps
+        </h3>
+        <ol class="steps-list">
+            <li *ngFor="let step of data.reproductionSteps">{{ step }}</li>
+        </ol>
+    </div>
+
+    <!-- Additional Info -->
+    <div class="additional-info" *ngIf="data.additionalInfo">
+        <mat-tab-group>
+            <mat-tab label="Details" *ngIf="data.additionalInfo.details">
+                <div class="tab-content">
+                    <pre>{{ data.additionalInfo.details }}</pre>
+                </div>
+            </mat-tab>
+            <mat-tab label="References" *ngIf="data.additionalInfo.references">
+                <div class="tab-content">
+                    <ul>
+                        <li *ngFor="let ref of data.additionalInfo.references">
+                            <a [href]="ref.url" target="_blank">{{ ref.title }}</a>
+                        </li>
+                    </ul>
+                </div>
+            </mat-tab>
+        </mat-tab-group>
+    </div>
+
+    <!-- Dialog Actions -->
+    <div class="dialog-actions">
+        <button mat-button (click)="close()">Close</button>
+        <button mat-raised-button color="primary">
+            <mat-icon>edit</mat-icon>
+            Apply Fix
+        </button>
+    </div>
+</div>

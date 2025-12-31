@@ -1,0 +1,299 @@
+.dialog-container {
+    @apply flex flex-col;
+    max-width: 1400px;
+    max-height: 90vh;
+    overflow: hidden;
+    border-radius: 16px;
+}
+
+// Dialog Header
+.dialog-header {
+    @apply flex items-start justify-between p-6 border-b-2;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    border-radius: 16px 16px 0 0;
+
+    &.header-warn {
+        background: linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(245, 158, 11, 0.1) 100%);
+    }
+
+    &.header-danger {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%);
+    }
+
+    &.header-accent {
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%);
+    }
+}
+
+.header-content {
+    @apply flex items-start gap-4 flex-1;
+}
+
+.header-icon {
+    @apply text-4xl;
+    width: 40px !important;
+    height: 40px !important;
+    font-size: 40px !important;
+    color: #667eea;
+}
+
+.header-info {
+    @apply flex flex-col gap-2 flex-1;
+}
+
+.dialog-title {
+    @apply text-2xl font-bold text-gray-900 m-0;
+}
+
+.file-info {
+    @apply flex items-center gap-2 text-sm text-gray-600;
+}
+
+.file-icon {
+    @apply text-gray-500;
+    font-size: 18px !important;
+    width: 18px !important;
+    height: 18px !important;
+}
+
+.file-path {
+    @apply font-mono bg-gray-100 px-2 py-1;
+    border-radius: 8px;
+}
+
+.line-number {
+    @apply flex items-center gap-1 bg-purple-100 px-2 py-1 font-mono;
+    border-radius: 8px;
+
+    mat-icon {
+        font-size: 16px !important;
+        width: 16px !important;
+        height: 16px !important;
+    }
+}
+
+.close-button {
+    @apply text-gray-600;
+    border-radius: 50%;
+
+    &:hover {
+        @apply bg-gray-200;
+    }
+}
+
+// Severity Section
+.severity-section {
+    @apply flex items-center gap-4 px-6 py-4 bg-gray-50;
+}
+
+.impact-label {
+    @apply text-sm font-semibold text-gray-700;
+}
+
+// Description Section
+.description-section {
+    @apply px-6 py-4 border-b;
+}
+
+.section-title {
+    @apply flex items-center gap-2 text-lg font-semibold text-gray-800 mb-3;
+
+    mat-icon {
+        @apply text-purple-600;
+        font-size: 24px !important;
+        width: 24px !important;
+        height: 24px !important;
+    }
+}
+
+.description-text {
+    @apply text-gray-700 leading-relaxed;
+}
+
+// Code Comparison (Two Columns)
+.code-comparison {
+    @apply flex gap-4 px-6 py-6 bg-gray-50;
+    min-height: 400px;
+    max-height: 500px;
+    overflow: hidden;
+}
+
+.code-column {
+    @apply flex-1 flex flex-col bg-white overflow-hidden;
+    border: 2px solid #e5e7eb;
+    border-radius: 16px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.current-code {
+    border-color: #fbbf24;
+}
+
+.suggestion-code {
+    border-color: #10b981;
+}
+
+.column-header {
+    @apply flex items-center gap-2 px-4 py-3 border-b;
+    background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+
+    h3 {
+        @apply text-base font-bold text-gray-800 m-0 flex-1;
+    }
+
+    mat-icon:first-child {
+        @apply text-purple-600;
+        font-size: 24px !important;
+        width: 24px !important;
+        height: 24px !important;
+    }
+
+    button {
+        @apply text-gray-600;
+
+        &:hover {
+            @apply bg-gray-200;
+        }
+    }
+}
+
+.current-code .column-header {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+
+    mat-icon:first-child {
+        @apply text-amber-600;
+    }
+}
+
+.suggestion-code .column-header {
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+
+    mat-icon:first-child {
+        @apply text-green-600;
+    }
+}
+
+.code-content {
+    @apply flex flex-1 overflow-auto p-4;
+    position: relative;
+}
+
+.line-numbers {
+    @apply flex flex-col pr-3 border-r border-gray-300 text-right select-none;
+    min-width: 50px;
+    background: #f9fafb;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    color: #6b7280;
+    line-height: 1.6;
+    padding: 4px 8px;
+}
+
+.code-block {
+    @apply flex-1 m-0 font-mono text-sm leading-relaxed overflow-auto;
+    background: white;
+    color: #1f2937;
+    padding: 4px 12px;
+    white-space: pre;
+    tab-size: 2;
+}
+
+.suggestion-text {
+    @apply text-gray-800 leading-relaxed whitespace-pre-wrap;
+    font-size: 14px;
+}
+
+.no-code {
+    @apply flex flex-col items-center justify-center text-gray-400 gap-2 w-full;
+
+    mat-icon {
+        font-size: 48px !important;
+        width: 48px !important;
+        height: 48px !important;
+    }
+
+    p {
+        @apply text-sm;
+    }
+}
+
+.column-divider {
+    @apply flex items-center justify-center;
+    width: 40px;
+
+    mat-icon {
+        @apply text-gray-400;
+        font-size: 32px !important;
+        width: 32px !important;
+        height: 32px !important;
+    }
+}
+
+// Reproduction Steps
+.reproduction-section {
+    @apply px-6 py-4 border-t;
+}
+
+.steps-list {
+    @apply ml-5 space-y-2;
+
+    li {
+        @apply text-gray-700 leading-relaxed;
+    }
+}
+
+// Additional Info Tabs
+.additional-info {
+    @apply px-6 py-4 border-t;
+
+    .tab-content {
+        @apply p-4;
+
+        pre {
+            @apply bg-gray-50 p-4 rounded font-mono text-sm overflow-auto;
+        }
+
+        ul {
+            @apply ml-5 space-y-2;
+
+            li {
+                @apply text-gray-700;
+
+                a {
+                    @apply text-purple-600 hover:underline;
+                }
+            }
+        }
+    }
+}
+
+// Dialog Actions
+.dialog-actions {
+    @apply flex items-center justify-end gap-3 px-6 py-4 border-t bg-gray-50;
+
+    button {
+        @apply shadow-md;
+
+        mat-icon {
+            margin-right: 8px;
+        }
+    }
+}
+
+// Scrollbar Styling
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    @apply bg-gray-100;
+}
+
+::-webkit-scrollbar-thumb {
+    @apply bg-gray-400 rounded;
+
+    &:hover {
+        @apply bg-gray-500;
+    }
+}

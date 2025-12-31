@@ -12,7 +12,7 @@
 }
 
 .header-content {
-    @apply max-w-7xl mx-auto px-6 py-4 flex items-center justify-between;
+    @apply w-full mx-auto px-6 py-4 flex items-center justify-between;
 }
 
 .logo-section {
@@ -96,7 +96,7 @@
 }
 
 .content-wrapper {
-    @apply max-w-7xl mx-auto px-6 py-8;
+    @apply w-full mx-auto px-0 py-0;
     animation: fadeIn 0.5s ease-out;
 }
 
@@ -118,7 +118,7 @@
 }
 
 .footer-content {
-    @apply max-w-7xl mx-auto px-6 py-6 flex items-center justify-between;
+    @apply w-full mx-auto px-6 py-6 flex items-center justify-between;
 
     p {
         @apply text-gray-600 m-0;

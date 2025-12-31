@@ -38,12 +38,25 @@ public class AnalysisController : ControllerBase
                 totalFiles = report.TotalFiles,
                 filesWithViolations = report.FilesWithViolations,
                 filesWithBugs = report.FilesWithBugs,
+                filesNeedingRefactoring = report.FilesNeedingRefactoring,
+                filesWithDuplications = report.FilesWithDuplications,
                 totalViolations = report.TotalViolations,
                 totalBugs = report.TotalBugs,
+                totalRefactorings = report.TotalRefactorings,
+                totalDuplications = report.TotalDuplications,
+                totalDuplicatedLines = report.TotalDuplicatedLines,
                 executionTime = report.ExecutionTime,
                 violationsBySeverity = report.ViolationsBySeverity,
                 bugsBySeverity = report.BugsBySeverity,
-                summary = report.Summary
+                refactoringsByPriority = report.RefactoringsByPriority,
+                duplicationsByImpact = report.DuplicationsByImpact,
+                summary = report.Summary,
+                projectSummary = report.ProjectSummary,
+                violations = report.Violations,
+                bugs = report.Bugs,
+                refactorings = report.Refactorings,
+                duplications = report.Duplications,
+                standards = report.Standards
             });
         }
         catch (InvalidOperationException ex)

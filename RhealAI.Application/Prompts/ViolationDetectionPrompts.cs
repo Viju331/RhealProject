@@ -20,10 +20,15 @@ For each violation found, provide:
 - Type: Classification (NamingConvention, Architecture, Security, etc.)
 - Severity: Critical/High/Medium/Low
 - File Path: Location of violation
-- Line Number: Exact line
-- Code Snippet: The violating code
+- Line Number: Start line of the violation
+- End Line Number: End line of the violation (for multi-line issues, or same as lineNumber for single-line issues)
+- Code Snippet: The violating code (single line for simple issues, entire method/block for complex issues)
 - Suggested Fix: How to correct it
 
-Return a structured JSON array of violations.
+IMPORTANT: 
+- If the violation is a single line (e.g., variable naming), provide just that line in codeSnippet and set endLineNumber = lineNumber
+- If the violation spans multiple lines or affects a whole method, include the entire method in codeSnippet and set appropriate lineNumber and endLineNumber range
+
+Return a structured JSON array of violations with fields: filePath, lineNumber, endLineNumber, ruleName, description, type, severity, codeSnippet, suggestedFix
 ";
 }

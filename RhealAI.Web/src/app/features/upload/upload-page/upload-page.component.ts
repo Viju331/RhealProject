@@ -26,6 +26,7 @@ import { Subscription } from 'rxjs';
 })
 export class UploadPageComponent implements OnDestroy {
   isUploading = false;
+  isUnzipping = false;
   isAnalyzing = false;
   uploadProgress = 0;
   selectedFile: File | null = null;
@@ -90,15 +91,24 @@ export class UploadPageComponent implements OnDestroy {
             this.uploadSource.file,
             this.connectionId || undefined
           ).toPromise();
+
+          // Show unzipping state
+          this.isUploading = false;
+          this.isUnzipping = true;
+          this.processingStatus = 'Unzipping files...';
+          this.uploadProgress = 0;
+
+          // Simulate unzipping progress (backend does this, but we show UI feedback)
+          await this.simulateUnzippingProgress();
+
+          this.isUnzipping = false;
           break;
 
         case 'folder':
-          if (!this.uploadSource.folderPath) {
-            throw new Error('No folder path provided');
-          }
-          this.processingStatus = 'Processing folder...';
+          // User entered a folder path - API will read from local filesystem
+          this.processingStatus = 'Reading files from local folder...';
           repository = await this.repositoryService.processFolder(
-            this.uploadSource.folderPath
+            this.uploadSource.folderPath!
           ).toPromise();
           break;
 
@@ -149,15 +159,29 @@ export class UploadPageComponent implements OnDestroy {
       this.uploadProgress = 100;
       this.snackBar.open('Analysis completed!', 'Close', { duration: 3000 });
 
-      // Navigate to dashboard with reportId
-      this.router.navigate(['/dashboard', this.repositoryId], {
+      // Navigate to analysis results with report ID
+      this.router.navigate(['/analysis-results', this.repositoryId], {
         queryParams: { reportId: report.reportId }
       });
-    } catch (error) {
-      console.error('Analysis failed:', error);
-      this.snackBar.open('Analysis failed. Please try again.', 'Close', { duration: 5000 });
+    } catch (error: any) {
+      console.error('Analysis error:', error);
+      this.snackBar.open(error.message || 'Analysis failed', 'Close', { duration: 5000 });
       this.isAnalyzing = false;
     }
+  }
+
+  private async simulateUnzippingProgress(): Promise<void> {
+    // Simulate unzipping progress with smooth animation
+    return new Promise((resolve) => {
+      const interval = setInterval(() => {
+        this.uploadProgress += 10;
+        if (this.uploadProgress >= 100) {
+          this.uploadProgress = 100;
+          clearInterval(interval);
+          setTimeout(resolve, 300);
+        }
+      }, 100);
+    });
   }
 
   private async initializeSignalR(): Promise<void> {

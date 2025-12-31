@@ -1,324 +1,259 @@
-<div class="dashboard-page" *ngIf="!isLoading; else loading">
-    <div class="container">
-        <!-- Page Header -->
-        <div class="page-header-section">
-            <div>
-                <h1 class="page-header">Analysis Dashboard</h1>
-                <p class="page-subtitle">{{ repository?.name }}</p>
+<div class="dashboard-page">
+    <!-- Hero Section with Visual Elements -->
+    <section class="hero-section">
+        <!-- Animated Background -->
+        <div class="hero-background">
+            <div class="bg-circles">
+                <div class="circle circle-1"></div>
+                <div class="circle circle-2"></div>
+                <div class="circle circle-3"></div>
             </div>
-            <div class="header-actions">
-                <button mat-raised-button color="primary" [routerLink]="['/standards', repository?.id]">
-                    <mat-icon>rule</mat-icon>
-                    View Standards
-                </button>
-                <button mat-raised-button (click)="exportReport('json')">
-                    <mat-icon>download</mat-icon>
-                    Export Report
-                </button>
-            </div>
+            <div class="bg-grid"></div>
         </div>
 
-        <!-- Project Summary Card -->
-        <div class="glass-card project-summary-card" *ngIf="report?.projectSummary">
-            <div class="project-summary-header">
-                <mat-icon class="summary-icon">auto_awesome</mat-icon>
-                <h2 class="summary-title">AI-Generated Project Summary</h2>
+        <div class="hero-container">
+            <div class="hero-content">
+                <!-- Badge -->
+                <div class="hero-badge">
+                    <mat-icon>auto_awesome</mat-icon>
+                    <span>AI-Powered Analysis Platform</span>
+                </div>
+
+                <!-- Main Heading -->
+                <h1 class="hero-title">
+                    Intelligent Code Analysis<br>
+                    <span class="gradient-text">Built for Modern Teams</span>
+                </h1>
+
+                <!-- Subtitle -->
+                <p class="hero-description">
+                    Transform your development workflow with AI-driven insights. Detect bugs, enforce standards,
+                    and optimize code quality automatically.
+                </p>
+
+                <!-- CTA Buttons -->
+                <div class="hero-actions">
+                    <button mat-raised-button color="primary" class="primary-btn" [routerLink]="['/upload']">
+                        <mat-icon>rocket_launch</mat-icon>
+                        Start Analysis
+                    </button>
+                    <button mat-button class="secondary-btn" [routerLink]="['/analysis-results']">
+                        View Demo
+                        <mat-icon>arrow_forward</mat-icon>
+                    </button>
+                </div>
+
+                <!-- Trust Badges -->
+                <div class="trust-badges">
+                    <div class="badge-item">
+                        <mat-icon>verified</mat-icon>
+                        <span>99.9% Accuracy</span>
+                    </div>
+                    <div class="badge-item">
+                        <mat-icon>speed</mat-icon>
+                        <span>10x Faster</span>
+                    </div>
+                    <div class="badge-item">
+                        <mat-icon>security</mat-icon>
+                        <span>Enterprise Ready</span>
+                    </div>
+                </div>
             </div>
 
-            <div class="project-summary-content">
-                <div class="summary-section">
-                    <h3 class="summary-section-title">
-                        <mat-icon>description</mat-icon>
-                        Description
-                    </h3>
-                    <p class="summary-text">{{ report?.projectSummary?.description }}</p>
-                </div>
-
-                <div class="summary-grid">
-                    <div class="summary-item">
-                        <mat-icon class="item-icon">layers</mat-icon>
-                        <div class="item-content">
-                            <span class="item-label">Architecture</span>
-                            <span class="item-value">{{ report?.projectSummary?.architecture }}</span>
+            <!-- Visual Code Window -->
+            <div class="hero-visual">
+                <div class="code-window">
+                    <!-- Window Header -->
+                    <div class="window-header">
+                        <div class="window-controls">
+                            <span class="dot dot-red"></span>
+                            <span class="dot dot-yellow"></span>
+                            <span class="dot dot-green"></span>
+                        </div>
+                        <div class="window-title">analysis-result.ts</div>
+                        <div class="window-actions">
+                            <mat-icon>more_horiz</mat-icon>
                         </div>
                     </div>
 
-                    <div class="summary-item">
-                        <mat-icon class="item-icon">code</mat-icon>
-                        <div class="item-content">
-                            <span class="item-label">Technology Stack</span>
-                            <span class="item-value">{{ report?.projectSummary?.technologyStack }}</span>
+                    <!-- Code Content -->
+                    <div class="code-content">
+                        <div class="code-line">
+                            <span class="line-number">1</span>
+                            <span class="code"><span class="keyword">interface</span> <span
+                                    class="type">AnalysisResult</span> &#123;</span>
+                        </div>
+                        <div class="code-line">
+                            <span class="line-number">2</span>
+                            <span class="code"> <span class="property">bugs</span>: <span
+                                    class="type">Bug</span>[];</span>
+                        </div>
+                        <div class="code-line highlighted">
+                            <span class="line-number">3</span>
+                            <span class="code"> <span class="property">violations</span>: <span
+                                    class="type">Violation</span>[];</span>
+                            <div class="ai-suggestion">
+                                <mat-icon>auto_fix_high</mat-icon>
+                                <span>AI detected 0 violations</span>
+                            </div>
+                        </div>
+                        <div class="code-line">
+                            <span class="line-number">4</span>
+                            <span class="code"> <span class="property">quality</span>: <span
+                                    class="type">number</span>;</span>
+                        </div>
+                        <div class="code-line">
+                            <span class="line-number">5</span>
+                            <span class="code">&#125;</span>
                         </div>
                     </div>
 
-                    <div class="summary-item">
-                        <mat-icon class="item-icon">language</mat-icon>
-                        <div class="item-content">
-                            <span class="item-label">Primary Language</span>
-                            <span class="item-value">{{ report?.projectSummary?.primaryLanguage }}</span>
-                        </div>
-                    </div>
-
-                    <div class="summary-item">
-                        <mat-icon class="item-icon">business_center</mat-icon>
-                        <div class="item-content">
-                            <span class="item-label">Business Logic</span>
-                            <span class="item-value">{{ report?.projectSummary?.businessLogic }}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="summary-section" *ngIf="(report?.projectSummary?.keyFeatures?.length || 0) > 0">
-                    <h3 class="summary-section-title">
-                        <mat-icon>star</mat-icon>
-                        Key Features
-                    </h3>
-                    <div class="features-chips">
-                        <span class="feature-chip" *ngFor="let feature of report?.projectSummary?.keyFeatures">
+                    <!-- Floating Metrics -->
+                    <div class="floating-metric metric-1">
+                        <div class="metric-icon">
                             <mat-icon>check_circle</mat-icon>
-                            {{ feature }}
-                        </span>
-                    </div>
-                </div>
-
-                <div class="summary-section" *ngIf="(report?.projectSummary?.mainComponents?.length || 0) > 0">
-                    <h3 class="summary-section-title">
-                        <mat-icon>widgets</mat-icon>
-                        Main Components
-                    </h3>
-                    <div class="components-list">
-                        <span class="component-tag" *ngFor="let component of report?.projectSummary?.mainComponents">
-                            {{ component }}
-                        </span>
-                    </div>
-                </div>
-
-                <div class="summary-section" *ngIf="(report?.projectSummary?.dependencies?.length || 0) > 0">
-                    <h3 class="summary-section-title">
-                        <mat-icon>extension</mat-icon>
-                        Dependencies
-                    </h3>
-                    <div class="dependencies-list">
-                        <span class="dependency-chip" *ngFor="let dep of report?.projectSummary?.dependencies">
-                            {{ dep }}
-                        </span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Stats Overview -->
-        <div class="stats-grid">
-            <app-stat-card title="Total Files Analyzed" [value]="report?.totalFiles || 0" icon="folder"
-                color="info"></app-stat-card>
-
-            <app-stat-card title="Files with Violations" [value]="report?.filesWithViolations || 0" icon="description"
-                color="warning"></app-stat-card>
-
-            <app-stat-card title="Files with Bugs" [value]="report?.filesWithBugs || 0" icon="description"
-                color="danger"></app-stat-card>
-
-            <app-stat-card title="Total Violations" [value]="report?.totalViolations || 0" icon="warning"
-                color="warning"></app-stat-card>
-
-            <app-stat-card title="Total Bugs" [value]="report?.totalBugs || 0" icon="bug_report"
-                color="danger"></app-stat-card>
-
-            <app-stat-card title="Analysis Time" [value]="report?.executionTime || '0s'" icon="schedule"
-                color="success"></app-stat-card>
-        </div>
-
-        <!-- Severity Distribution -->
-        <div class="content-grid">
-            <!-- Violations by Severity -->
-            <div class="glass-card severity-card">
-                <h3 class="card-title">
-                    <mat-icon>warning</mat-icon>
-                    Violations by Severity
-                </h3>
-                <div class="severity-list">
-                    <div class="severity-item">
-                        <app-severity-badge [severity]="SeverityLevel.Critical"
-                            [count]="getSeverityCount(SeverityLevel.Critical, 'violations')"></app-severity-badge>
-                        <div class="severity-bar">
-                            <div class="bar-fill critical"
-                                [style.width.%]="(getSeverityCount(SeverityLevel.Critical, 'violations') / (report?.totalViolations || 1)) * 100">
-                            </div>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value">95%</div>
+                            <div class="metric-label">Code Quality</div>
                         </div>
                     </div>
-                    <div class="severity-item">
-                        <app-severity-badge [severity]="SeverityLevel.High"
-                            [count]="getSeverityCount(SeverityLevel.High, 'violations')"></app-severity-badge>
-                        <div class="severity-bar">
-                            <div class="bar-fill high"
-                                [style.width.%]="(getSeverityCount(SeverityLevel.High, 'violations') / (report?.totalViolations || 1)) * 100">
-                            </div>
+
+                    <div class="floating-metric metric-2">
+                        <div class="metric-icon bug">
+                            <mat-icon>bug_report</mat-icon>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value">12</div>
+                            <div class="metric-label">Bugs Found</div>
                         </div>
                     </div>
-                    <div class="severity-item">
-                        <app-severity-badge [severity]="SeverityLevel.Medium"
-                            [count]="getSeverityCount(SeverityLevel.Medium, 'violations')"></app-severity-badge>
-                        <div class="severity-bar">
-                            <div class="bar-fill medium"
-                                [style.width.%]="(getSeverityCount(SeverityLevel.Medium, 'violations') / (report?.totalViolations || 1)) * 100">
-                            </div>
+
+                    <div class="floating-metric metric-3">
+                        <div class="metric-icon performance">
+                            <mat-icon>speed</mat-icon>
                         </div>
-                    </div>
-                    <div class="severity-item">
-                        <app-severity-badge [severity]="SeverityLevel.Low"
-                            [count]="getSeverityCount(SeverityLevel.Low, 'violations')"></app-severity-badge>
-                        <div class="severity-bar">
-                            <div class="bar-fill low"
-                                [style.width.%]="(getSeverityCount(SeverityLevel.Low, 'violations') / (report?.totalViolations || 1)) * 100">
-                            </div>
+                        <div class="metric-content">
+                            <div class="metric-value">A+</div>
+                            <div class="metric-label">Performance</div>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
+    </section>
 
-            <!-- Bugs by Severity -->
-            <div class="glass-card severity-card">
-                <h3 class="card-title">
+    <!-- Features Section -->
+    <section class="features-section">
+        <div class="section-header">
+            <h2 class="section-title">Powerful Features for Code Excellence</h2>
+            <p class="section-subtitle">Everything you need to maintain high-quality code</p>
+        </div>
+
+        <div class="features-grid">
+            <!-- Bug Detection -->
+            <div class="feature-card">
+                <div class="feature-icon-circle bug-icon">
                     <mat-icon>bug_report</mat-icon>
-                    Bugs by Severity
-                </h3>
-                <div class="severity-list">
-                    <div class="severity-item">
-                        <app-severity-badge [severity]="SeverityLevel.Critical"
-                            [count]="getSeverityCount(SeverityLevel.Critical, 'bugs')"></app-severity-badge>
-                        <div class="severity-bar">
-                            <div class="bar-fill critical"
-                                [style.width.%]="(getSeverityCount(SeverityLevel.Critical, 'bugs') / (report?.totalBugs || 1)) * 100">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="severity-item">
-                        <app-severity-badge [severity]="SeverityLevel.High"
-                            [count]="getSeverityCount(SeverityLevel.High, 'bugs')"></app-severity-badge>
-                        <div class="severity-bar">
-                            <div class="bar-fill high"
-                                [style.width.%]="(getSeverityCount(SeverityLevel.High, 'bugs') / (report?.totalBugs || 1)) * 100">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="severity-item">
-                        <app-severity-badge [severity]="SeverityLevel.Medium"
-                            [count]="getSeverityCount(SeverityLevel.Medium, 'bugs')"></app-severity-badge>
-                        <div class="severity-bar">
-                            <div class="bar-fill medium"
-                                [style.width.%]="(getSeverityCount(SeverityLevel.Medium, 'bugs') / (report?.totalBugs || 1)) * 100">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="severity-item">
-                        <app-severity-badge [severity]="SeverityLevel.Low"
-                            [count]="getSeverityCount(SeverityLevel.Low, 'bugs')"></app-severity-badge>
-                        <div class="severity-bar">
-                            <div class="bar-fill low"
-                                [style.width.%]="(getSeverityCount(SeverityLevel.Low, 'bugs') / (report?.totalBugs || 1)) * 100">
-                            </div>
-                        </div>
-                    </div>
                 </div>
+                <h3 class="feature-title">Bug Detection</h3>
+                <p class="feature-description">
+                    AI-powered detection of potential bugs and runtime issues before they reach production
+                </p>
+                <button mat-button class="feature-link" [routerLink]="['/upload']">
+                    Explore
+                    <mat-icon>arrow_forward</mat-icon>
+                </button>
+            </div>
+
+            <!-- Standards Compliance -->
+            <div class="feature-card">
+                <div class="feature-icon-circle standards-icon">
+                    <mat-icon>verified</mat-icon>
+                </div>
+                <h3 class="feature-title">Standards Compliance</h3>
+                <p class="feature-description">
+                    Ensure your codebase adheres to industry standards and best practices automatically
+                </p>
+                <button mat-button class="feature-link" [routerLink]="['/standards']">
+                    Explore
+                    <mat-icon>arrow_forward</mat-icon>
+                </button>
+            </div>
+
+            <!-- Smart Refactoring -->
+            <div class="feature-card">
+                <div class="feature-icon-circle refactor-icon">
+                    <mat-icon>auto_fix_high</mat-icon>
+                </div>
+                <h3 class="feature-title">Smart Refactoring</h3>
+                <p class="feature-description">
+                    Get intelligent suggestions for code improvements and performance optimizations
+                </p>
+                <button mat-button class="feature-link" [routerLink]="['/upload']">
+                    Explore
+                    <mat-icon>arrow_forward</mat-icon>
+                </button>
+            </div>
+
+            <!-- Duplication Detection -->
+            <div class="feature-card">
+                <div class="feature-icon-circle duplicate-icon">
+                    <mat-icon>content_copy</mat-icon>
+                </div>
+                <h3 class="feature-title">Duplication Detection</h3>
+                <p class="feature-description">
+                    Identify redundant code patterns and enforce DRY principles across your project
+                </p>
+                <button mat-button class="feature-link" [routerLink]="['/upload']">
+                    Explore
+                    <mat-icon>arrow_forward</mat-icon>
+                </button>
+            </div>
+
+            <!-- Documentation -->
+            <div class="feature-card">
+                <div class="feature-icon-circle docs-icon">
+                    <mat-icon>description</mat-icon>
+                </div>
+                <h3 class="feature-title">Auto Documentation</h3>
+                <p class="feature-description">
+                    Generate comprehensive documentation and coding standards from your codebase
+                </p>
+                <button mat-button class="feature-link" [routerLink]="['/standards']">
+                    Explore
+                    <mat-icon>arrow_forward</mat-icon>
+                </button>
+            </div>
+
+            <!-- Reports -->
+            <div class="feature-card">
+                <div class="feature-icon-circle reports-icon">
+                    <mat-icon>analytics</mat-icon>
+                </div>
+                <h3 class="feature-title">Detailed Reports</h3>
+                <p class="feature-description">
+                    Export comprehensive analysis reports with actionable insights for your team
+                </p>
+                <button mat-button class="feature-link" [routerLink]="['/reports']">
+                    Explore
+                    <mat-icon>arrow_forward</mat-icon>
+                </button>
             </div>
         </div>
+    </section>
 
-        <!-- Detailed Tables -->
-        <mat-tab-group class="details-tabs">
-            <!-- Violations Tab -->
-            <mat-tab label="Violations ({{ allViolations.length }})">
-                <div class="tab-content">
-                    <div class="table-container">
-                        <table mat-table [dataSource]="allViolations" class="violations-table">
-                            <ng-container matColumnDef="severity">
-                                <th mat-header-cell *matHeaderCellDef>Severity</th>
-                                <td mat-cell *matCellDef="let violation">
-                                    <app-severity-badge [severity]="violation.severity"></app-severity-badge>
-                                </td>
-                            </ng-container>
-
-                            <ng-container matColumnDef="file">
-                                <th mat-header-cell *matHeaderCellDef>File</th>
-                                <td mat-cell *matCellDef="let violation">{{ violation.fileName || 'N/A' }}</td>
-                            </ng-container>
-
-                            <ng-container matColumnDef="line">
-                                <th mat-header-cell *matHeaderCellDef>Line</th>
-                                <td mat-cell *matCellDef="let violation">{{ violation.lineNumber }}</td>
-                            </ng-container>
-
-                            <ng-container matColumnDef="rule">
-                                <th mat-header-cell *matHeaderCellDef>Rule</th>
-                                <td mat-cell *matCellDef="let violation">{{ violation.ruleName }}</td>
-                            </ng-container>
-
-                            <ng-container matColumnDef="description">
-                                <th mat-header-cell *matHeaderCellDef>Description</th>
-                                <td mat-cell *matCellDef="let violation">{{ violation.description }}</td>
-                            </ng-container>
-
-                            <ng-container matColumnDef="actions">
-                                <th mat-header-cell *matHeaderCellDef>Actions</th>
-                                <td mat-cell *matCellDef="let violation">
-                                    <button mat-icon-button color="primary">
-                                        <mat-icon>visibility</mat-icon>
-                                    </button>
-                                </td>
-                            </ng-container>
-
-                            <tr mat-header-row *matHeaderRowDef="violationColumns"></tr>
-                            <tr mat-row *matRowDef="let row; columns: violationColumns;"></tr>
-                        </table>
-                    </div>
-                </div>
-            </mat-tab>
-
-            <!-- Bugs Tab -->
-            <mat-tab label="Bugs ({{ allBugs.length }})">
-                <div class="tab-content">
-                    <div class="table-container">
-                        <table mat-table [dataSource]="allBugs" class="bugs-table">
-                            <ng-container matColumnDef="severity">
-                                <th mat-header-cell *matHeaderCellDef>Severity</th>
-                                <td mat-cell *matCellDef="let bug">
-                                    <app-severity-badge [severity]="bug.severity"></app-severity-badge>
-                                </td>
-                            </ng-container>
-
-                            <ng-container matColumnDef="title">
-                                <th mat-header-cell *matHeaderCellDef>Title</th>
-                                <td mat-cell *matCellDef="let bug">{{ bug.title }}</td>
-                            </ng-container>
-
-                            <ng-container matColumnDef="file">
-                                <th mat-header-cell *matHeaderCellDef>File</th>
-                                <td mat-cell *matCellDef="let bug">{{ bug.fileName || 'N/A' }}</td>
-                            </ng-container>
-
-                            <ng-container matColumnDef="impact">
-                                <th mat-header-cell *matHeaderCellDef>Impact</th>
-                                <td mat-cell *matCellDef="let bug">{{ bug.impact }}</td>
-                            </ng-container>
-
-                            <ng-container matColumnDef="actions">
-                                <th mat-header-cell *matHeaderCellDef>Actions</th>
-                                <td mat-cell *matCellDef="let bug">
-                                    <button mat-icon-button color="primary">
-                                        <mat-icon>visibility</mat-icon>
-                                    </button>
-                                </td>
-                            </ng-container>
-
-                            <tr mat-header-row *matHeaderRowDef="bugColumns"></tr>
-                            <tr mat-row *matRowDef="let row; columns: bugColumns;"></tr>
-                        </table>
-                    </div>
-                </div>
-            </mat-tab>
-        </mat-tab-group>
-    </div>
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="cta-content">
+            <h2 class="cta-title">Ready to Transform Your Code Quality?</h2>
+            <p class="cta-description">
+                Start analyzing your codebase today and discover insights you never knew existed
+            </p>
+            <button mat-raised-button color="primary" class="cta-button" [routerLink]="['/upload']">
+                <mat-icon>rocket_launch</mat-icon>
+                Get Started Now
+            </button>
+        </div>
+    </section>
 </div>
-
-<ng-template #loading>
-    <app-loading-spinner message="Loading dashboard..."></app-loading-spinner>
-</ng-template>

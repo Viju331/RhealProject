@@ -1,117 +1,144 @@
 <div class="upload-page">
-    <div class="container">
-        <!-- Hero Section -->
-        <div class="hero-section">
-            <div class="hero-icon">
-                <mat-icon>cloud_upload</mat-icon>
-            </div>
-            <h1 class="page-header">Upload Your Repository</h1>
-            <p class="page-subtitle">
-                Upload your codebase and let AI analyze it for bugs, violations, and coding standards
-            </p>
+    <!-- Hero Section -->
+    <div class="hero-section">
+        <div class="hero-icon">
+            <mat-icon>cloud_upload</mat-icon>
+        </div>
+        <h1 class="page-header">Upload Your Repository</h1>
+        <p class="page-subtitle">
+            Upload your codebase and let AI analyze it for bugs, violations, and coding standards
+        </p>
+    </div>
+
+    <!-- Upload Card -->
+    <div class="upload-card glass-card">
+        <app-file-upload (fileSelected)="onFileSelected($event)" (sourceSelected)="onSourceSelected($event)">
+        </app-file-upload>
+
+        <!-- Upload Progress -->
+        <div *ngIf="isUploading" class="progress-section">
+            <h3 class="progress-title">{{ processingStatus || 'Uploading Repository...' }}</h3>
+            <mat-progress-bar mode="determinate" [value]="uploadProgress"></mat-progress-bar>
+            <p class="progress-text">{{ uploadProgress }}% Complete</p>
         </div>
 
-        <!-- Upload Card -->
-        <div class="upload-card glass-card">
-            <app-file-upload (fileSelected)="onFileSelected($event)" (sourceSelected)="onSourceSelected($event)">
-            </app-file-upload>
-
-            <!-- Upload Progress -->
-            <div *ngIf="isUploading" class="progress-section">
-                <h3 class="progress-title">{{ processingStatus || 'Uploading Repository...' }}</h3>
-                <mat-progress-bar mode="determinate" [value]="uploadProgress"></mat-progress-bar>
-                <p class="progress-text">{{ uploadProgress }}% Complete</p>
-            </div>
-
-            <!-- Analysis Progress -->
-            <div *ngIf="isAnalyzing" class="progress-section">
-                <h3 class="progress-title">{{ processingStatus || 'Analyzing your repository with AI...' }}</h3>
-                <mat-progress-bar mode="determinate" [value]="uploadProgress"></mat-progress-bar>
-                <p class="progress-text">{{ uploadProgress }}% Complete</p>
-
-                <!-- Real-time Analysis Details -->
-                <div class="analysis-details" *ngIf="processingStatus">
-                    <div class="current-activity">
-                        <mat-icon class="activity-icon">{{ getActivityIcon() }}</mat-icon>
-                        <span class="activity-text">{{ processingStatus }}</span>
-                    </div>
+        <!-- Unzipping Progress -->
+        <div *ngIf="isUnzipping" class="progress-section">
+            <h3 class="progress-title">{{ processingStatus || 'Unzipping files...' }}</h3>
+            <mat-progress-bar mode="determinate" [value]="uploadProgress"></mat-progress-bar>
+            <p class="progress-text">{{ uploadProgress }}% Complete</p>
+            <div class="analysis-details">
+                <div class="current-activity">
+                    <mat-icon class="activity-icon spinning">folder_zip</mat-icon>
+                    <span class="activity-text">Extracting files from ZIP archive...</span>
                 </div>
-
-                <div class="analysis-steps">
-                    <div class="step" [class.completed]="uploadProgress >= 15">
-                        <mat-icon class="step-icon">{{ uploadProgress >= 15 ? 'check_circle' : 'radio_button_unchecked'
-                            }}</mat-icon>
-                        <span>Analyzing structure</span>
-                    </div>
-                    <div class="step" [class.completed]="uploadProgress >= 40"
-                        [class.active]="uploadProgress >= 15 && uploadProgress < 40">
-                        <mat-icon class="step-icon">{{ uploadProgress >= 40 ? 'check_circle' : (uploadProgress >= 15 ?
-                            'radio_button_checked' : 'radio_button_unchecked') }}</mat-icon>
-                        <span>Extracting standards</span>
-                    </div>
-                    <div class="step" [class.completed]="uploadProgress >= 70"
-                        [class.active]="uploadProgress >= 40 && uploadProgress < 70">
-                        <mat-icon class="step-icon">{{ uploadProgress >= 70 ? 'check_circle' : (uploadProgress >= 40 ?
-                            'radio_button_checked' : 'radio_button_unchecked') }}</mat-icon>
-                        <span>Detecting violations</span>
-                    </div>
-                    <div class="step" [class.completed]="uploadProgress >= 90"
-                        [class.active]="uploadProgress >= 70 && uploadProgress < 90">
-                        <mat-icon class="step-icon">{{ uploadProgress >= 90 ? 'check_circle' : (uploadProgress >= 70 ?
-                            'radio_button_checked' : 'radio_button_unchecked') }}</mat-icon>
-                        <span>Finding bugs</span>
-                    </div>
-                    <div class="step" [class.completed]="uploadProgress >= 100"
-                        [class.active]="uploadProgress >= 90 && uploadProgress < 100">
-                        <mat-icon class="step-icon">{{ uploadProgress >= 100 ? 'check_circle' : (uploadProgress >= 90 ?
-                            'radio_button_checked' : 'radio_button_unchecked') }}</mat-icon>
-                        <span>Generating report</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Action Button -->
-            <div *ngIf="uploadSource && !isUploading && !isAnalyzing" class="action-section">
-                <button mat-raised-button color="primary" class="upload-button" (click)="uploadAndAnalyze()">
-                    <mat-icon>analytics</mat-icon>
-                    Start Analysis
-                </button>
             </div>
         </div>
 
-        <!-- Features Grid -->
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="feature-icon bug-icon">
-                    <mat-icon>bug_report</mat-icon>
+        <!-- Analysis Progress -->
+        <div *ngIf="isAnalyzing" class="progress-section">
+            <h3 class="progress-title">{{ processingStatus || 'Analyzing your repository with AI...' }}</h3>
+            <mat-progress-bar mode="determinate" [value]="uploadProgress"></mat-progress-bar>
+            <p class="progress-text">{{ uploadProgress }}% Complete</p>
+
+            <!-- Real-time Analysis Details -->
+            <div class="analysis-details" *ngIf="processingStatus">
+                <div class="current-activity">
+                    <mat-icon class="activity-icon">{{ getActivityIcon() }}</mat-icon>
+                    <span class="activity-text">{{ processingStatus }}</span>
                 </div>
-                <h3>Bug Detection</h3>
-                <p>AI-powered analysis to detect logical bugs and potential runtime issues</p>
             </div>
 
-            <div class="feature-card">
-                <div class="feature-icon violation-icon">
-                    <mat-icon>rule</mat-icon>
+            <div class="analysis-steps">
+                <div class="step" [class.completed]="uploadProgress >= 15">
+                    <mat-icon class="step-icon">{{ uploadProgress >= 15 ? 'check_circle' : 'radio_button_unchecked'
+                        }}</mat-icon>
+                    <span>Analyzing structure</span>
                 </div>
-                <h3>Violation Detection</h3>
-                <p>Identify coding standard violations and best practice deviations</p>
+                <div class="step" [class.completed]="uploadProgress >= 40"
+                    [class.active]="uploadProgress >= 15 && uploadProgress < 40">
+                    <mat-icon class="step-icon">{{ uploadProgress >= 40 ? 'check_circle' : (uploadProgress >= 15 ?
+                        'radio_button_checked' : 'radio_button_unchecked') }}</mat-icon>
+                    <span>Extracting standards</span>
+                </div>
+                <div class="step" [class.completed]="uploadProgress >= 70"
+                    [class.active]="uploadProgress >= 40 && uploadProgress < 70">
+                    <mat-icon class="step-icon">{{ uploadProgress >= 70 ? 'check_circle' : (uploadProgress >= 40 ?
+                        'radio_button_checked' : 'radio_button_unchecked') }}</mat-icon>
+                    <span>Detecting violations</span>
+                </div>
+                <div class="step" [class.completed]="uploadProgress >= 90"
+                    [class.active]="uploadProgress >= 70 && uploadProgress < 90">
+                    <mat-icon class="step-icon">{{ uploadProgress >= 90 ? 'check_circle' : (uploadProgress >= 70 ?
+                        'radio_button_checked' : 'radio_button_unchecked') }}</mat-icon>
+                    <span>Finding bugs</span>
+                </div>
+                <div class="step" [class.completed]="uploadProgress >= 100"
+                    [class.active]="uploadProgress >= 90 && uploadProgress < 100">
+                    <mat-icon class="step-icon">{{ uploadProgress >= 100 ? 'check_circle' : (uploadProgress >= 90 ?
+                        'radio_button_checked' : 'radio_button_unchecked') }}</mat-icon>
+                    <span>Generating report</span>
+                </div>
             </div>
+        </div>
 
-            <div class="feature-card">
-                <div class="feature-icon standards-icon">
-                    <mat-icon>description</mat-icon>
-                </div>
-                <h3>Standards Generation</h3>
-                <p>Extract or generate comprehensive coding standards for your project</p>
-            </div>
+        <!-- Action Button -->
+        <div *ngIf="uploadSource && !isUploading && !isUnzipping && !isAnalyzing" class="action-section">
+            <button mat-raised-button color="primary" class="upload-button" (click)="uploadAndAnalyze()">
+                <mat-icon>analytics</mat-icon>
+                Start Analysis
+            </button>
+        </div>
+    </div>
 
-            <div class="feature-card">
-                <div class="feature-icon report-icon">
-                    <mat-icon>assessment</mat-icon>
-                </div>
-                <h3>Detailed Reports</h3>
-                <p>Get actionable reports with exact reproduction steps for every issue</p>
+    <!-- Features Grid -->
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon bug-icon">
+                <mat-icon>bug_report</mat-icon>
             </div>
+            <h3>Bug Detection</h3>
+            <p>AI-powered analysis to detect logical bugs and potential runtime issues</p>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon violation-icon">
+                <mat-icon>rule</mat-icon>
+            </div>
+            <h3>Violation Detection</h3>
+            <p>Identify coding standard violations and best practice deviations</p>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon standards-icon">
+                <mat-icon>description</mat-icon>
+            </div>
+            <h3>Standards Generation</h3>
+            <p>Extract or generate comprehensive coding standards for your project</p>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon report-icon">
+                <mat-icon>assessment</mat-icon>
+            </div>
+            <h3>Detailed Reports</h3>
+            <p>Get actionable reports with exact reproduction steps for every issue</p>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon refactoring-icon">
+                <mat-icon>build_circle</mat-icon>
+            </div>
+            <h3>Code Refactoring</h3>
+            <p>Get intelligent refactoring suggestions with improved code alternatives</p>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon redundancy-icon">
+                <mat-icon>content_copy</mat-icon>
+            </div>
+            <h3>Redundancy Detection</h3>
+            <p>Find duplicate code and redundant methods across your entire project</p>
         </div>
     </div>
 </div>

@@ -161,6 +161,512 @@ public class AIAnalysisService : IAIAnalysisService
         return bugs;
     }
 
+    public async Task<List<Refactoring>> DetectRefactoringOpportunitiesAsync(List<CodeFile> files, string? connectionId = null)
+    {
+        var provider = _configuration["AI:Provider"] ?? "Demo";
+
+        if (provider.Equals("Demo", StringComparison.OrdinalIgnoreCase))
+        {
+            // Demo mode with detailed progress
+            await SendProgress(connectionId, 90, "Demo Mode: Analyzing refactoring opportunities...");
+            for (int i = 0; i < files.Count; i++)
+            {
+                var file = files[i];
+                var fileName = Path.GetFileName(file.FilePath);
+                var fileType = GetFileType(file.FilePath);
+                await SendProgress(connectionId, 90 + (i * 5 / files.Count),
+                    $"Checking {fileType} for refactoring: {fileName}");
+                await Task.Delay(50); // Small delay to show progress
+            }
+            return await Task.FromResult(GenerateMockRefactorings(files));
+        }
+
+        var client = _agentFactory.CreateBugDetectionClient(); // Reuse bug detection client for refactoring
+        var refactorings = new List<Refactoring>();
+
+        // Analyze files in batches
+        var batches = files.Chunk(10).ToList();
+        var totalBatches = batches.Count;
+        var currentBatch = 0;
+
+        foreach (var batch in batches)
+        {
+            currentBatch++;
+
+            for (int i = 0; i < batch.Length; i++)
+            {
+                var file = batch[i];
+                var fileName = Path.GetFileName(file.FilePath);
+                var fileType = GetFileType(file.FilePath);
+                var overallProgress = 90 + ((currentBatch - 1) * 5 / totalBatches) + (i * 5 / (totalBatches * batch.Length));
+                await SendProgress(connectionId, overallProgress,
+                    $"AI checking {fileType} for refactoring: {fileName}");
+            }
+
+            var filesText = string.Join("\n\n", batch.Select(f =>
+                $"File: {f.FilePath}\n```\n{f.Content}\n```"));
+
+            var prompt = @$"Analyze the following code files for refactoring opportunities. 
+Look for:
+- Long methods (>50 lines) that need extraction
+- Complex conditions that need simplification
+- Duplicate code blocks
+- Magic numbers that need constants
+- Deep nesting (>3 levels)
+- Large classes with multiple responsibilities
+- Long parameter lists
+
+For each refactoring opportunity, provide:
+1. Exact file path and line number
+2. Type of refactoring needed
+3. Current problematic code snippet
+4. Suggested improved code
+5. Reason for refactoring
+6. Benefits and improvement areas
+
+Return results in JSON format as an array of objects with these fields:
+filePath, lineNumber, refactoringType, title, description, currentCode, suggestedCode, reason, benefits, priority (Critical/High/Medium/Low), improvementAreas (array of strings like ['Readability', 'Maintainability']).
+
+Files to analyze:
+{filesText}";
+
+            var messages = new List<ChatMessage>
+            {
+                new SystemChatMessage("You are a code refactoring expert. Return refactoring suggestions in JSON format."),
+                new UserChatMessage(prompt)
+            };
+
+            await SendProgress(connectionId, 90 + (currentBatch * 5 / totalBatches),
+                $"AI analyzing batch {currentBatch}/{totalBatches} for refactorings...");
+
+            var completion = await client.CompleteChatAsync(messages);
+            var responseText = completion.Value.Content[0].Text;
+            var batchRefactorings = ParseRefactoringsFromResponse(responseText);
+            refactorings.AddRange(batchRefactorings);
+        }
+
+        return refactorings;
+    }
+
+    private List<Refactoring> ParseRefactoringsFromResponse(string response)
+    {
+        try
+        {
+            var jsonContent = ExtractJsonFromResponse(response);
+            var dtos = JsonSerializer.Deserialize<List<RefactoringDto>>(jsonContent);
+
+            return dtos?.Select(dto => new Refactoring
+            {
+                Id = Guid.NewGuid().ToString(),
+                FilePath = dto.FilePath ?? "",
+                LineNumber = dto.LineNumber,
+                EndLineNumber = dto.EndLineNumber > 0 ? dto.EndLineNumber : dto.LineNumber,
+                RefactoringType = dto.RefactoringType ?? "General",
+                Title = dto.Title ?? "Refactoring Opportunity",
+                Description = dto.Description ?? "",
+                CurrentCode = dto.CurrentCode ?? "",
+                SuggestedCode = dto.SuggestedCode ?? "",
+                Reason = dto.Reason ?? "",
+                Benefits = dto.Benefits ?? "",
+                Priority = ParseSeverity(dto.Priority),
+                ImprovementAreas = dto.ImprovementAreas ?? new List<string>()
+            }).ToList() ?? new List<Refactoring>();
+        }
+        catch
+        {
+            return new List<Refactoring>();
+        }
+    }
+
+    private List<Refactoring> GenerateMockRefactorings(List<CodeFile> files)
+    {
+        var refactorings = new List<Refactoring>();
+        var random = new Random(42); // Consistent seed for repeatable results
+
+        foreach (var file in files)
+        {
+            var lines = file.Content.Split('\n');
+            var linesArray = lines.ToArray();
+
+            // Check for long methods
+            var methodPattern = new[] { "function ", "func ", "def ", "public ", "private ", "protected ", "void ", "async " };
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                if (methodPattern.Any(p => line.Contains(p, StringComparison.OrdinalIgnoreCase)))
+                {
+                    // Count lines until method end (simple heuristic)
+                    int methodLength = 0;
+                    int openBraces = 0;
+                    bool inMethod = false;
+
+                    for (int j = i; j < Math.Min(i + 100, lines.Length); j++)
+                    {
+                        if (lines[j].Contains("{")) { openBraces++; inMethod = true; }
+                        if (lines[j].Contains("}")) openBraces--;
+                        if (inMethod) methodLength++;
+                        if (inMethod && openBraces == 0) break;
+                    }
+
+                    if (methodLength > 50)
+                    {
+                        var (snippet, startLine, endLine) = GetCodeSnippetWithRange(linesArray, i + 1);
+                        refactorings.Add(new Refactoring
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            FilePath = file.FilePath,
+                            LineNumber = startLine,
+                            EndLineNumber = endLine,
+                            RefactoringType = "Extract Method",
+                            Title = "Long Method Detected",
+                            Description = $"This method has approximately {methodLength} lines and should be broken down into smaller, more focused methods.",
+                            CurrentCode = snippet,
+                            SuggestedCode = "// Extract logical blocks into separate methods\n// Example: ExtractValidationLogic(), ExtractBusinessLogic(), ExtractDataAccess()",
+                            Reason = "Long methods are difficult to understand, test, and maintain. They often violate the Single Responsibility Principle.",
+                            Benefits = "Improved readability, easier testing, better maintainability, and clearer code organization.",
+                            Priority = methodLength > 100 ? SeverityLevel.Critical : SeverityLevel.High,
+                            ImprovementAreas = new List<string> { "Readability", "Maintainability", "Testability" }
+                        });
+                    }
+                }
+            }
+
+            // Check for complex conditions (nested if statements)
+            int nestingLevel = 0;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i].Trim();
+                if (line.StartsWith("if ") || line.StartsWith("if("))
+                {
+                    nestingLevel++;
+                    if (nestingLevel > 3)
+                    {
+                        var (snippet, startLine, endLine) = GetCodeSnippetWithRange(linesArray, i + 1);
+                        refactorings.Add(new Refactoring
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            FilePath = file.FilePath,
+                            LineNumber = startLine,
+                            EndLineNumber = endLine,
+                            RefactoringType = "Simplify Conditional",
+                            Title = "Deep Nesting Detected",
+                            Description = $"This code has {nestingLevel} levels of nested conditions, making it hard to follow.",
+                            CurrentCode = snippet,
+                            SuggestedCode = "// Use guard clauses or early returns\n// Example: if (!condition) return;\n// Or extract into separate validation methods",
+                            Reason = "Deeply nested conditions create cognitive load and increase the risk of logic errors.",
+                            Benefits = "Flatter code structure, easier to understand control flow, reduced complexity.",
+                            Priority = SeverityLevel.High,
+                            ImprovementAreas = new List<string> { "Readability", "Maintainability" }
+                        });
+                    }
+                }
+                if (line.Contains("}")) nestingLevel = Math.Max(0, nestingLevel - 1);
+            }
+
+            // Check for magic numbers
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                // Look for hardcoded numbers (excluding 0, 1, -1, 100)
+                var numbersPattern = System.Text.RegularExpressions.Regex.Matches(line, @"\b(\d{2,})\b");
+                foreach (System.Text.RegularExpressions.Match match in numbersPattern)
+                {
+                    var number = match.Value;
+                    if (number != "100" && number != "10" && !line.Contains("//") && !line.Contains("private") && !line.Contains("const"))
+                    {
+                        var (snippet, startLine, endLine) = GetCodeSnippetWithRange(linesArray, i + 1);
+                        refactorings.Add(new Refactoring
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            FilePath = file.FilePath,
+                            LineNumber = startLine,
+                            EndLineNumber = endLine,
+                            RefactoringType = "Replace Magic Number",
+                            Title = $"Magic Number: {number}",
+                            Description = $"The hardcoded number '{number}' should be replaced with a named constant.",
+                            CurrentCode = snippet,
+                            SuggestedCode = $"private const int MAX_ITEMS = {number}; // Use descriptive name",
+                            Reason = "Magic numbers reduce code readability and make it harder to maintain. Named constants provide context and make changes easier.",
+                            Benefits = "Better code documentation, easier to update values, clearer intent.",
+                            Priority = SeverityLevel.Medium,
+                            ImprovementAreas = new List<string> { "Readability", "Maintainability" }
+                        });
+                        break; // Only one refactoring per line
+                    }
+                }
+            }
+
+            // Check for duplicate code patterns (simple string matching)
+            var codeBlocks = new Dictionary<string, List<int>>();
+            for (int i = 0; i < lines.Length - 3; i++)
+            {
+                var block = string.Join("\n", lines.Skip(i).Take(3)).Trim();
+                if (block.Length > 50 && !block.Contains("//") && !block.StartsWith("using"))
+                {
+                    if (!codeBlocks.ContainsKey(block))
+                        codeBlocks[block] = new List<int>();
+                    codeBlocks[block].Add(i + 1);
+                }
+            }
+
+            foreach (var duplicate in codeBlocks.Where(kvp => kvp.Value.Count > 1))
+            {
+                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(linesArray, duplicate.Value.First());
+                refactorings.Add(new Refactoring
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    FilePath = file.FilePath,
+                    LineNumber = startLine,
+                    EndLineNumber = endLine,
+                    RefactoringType = "Extract Method",
+                    Title = "Duplicate Code Detected",
+                    Description = $"This code block appears {duplicate.Value.Count} times in the file at lines: {string.Join(", ", duplicate.Value)}.",
+                    CurrentCode = snippet,
+                    SuggestedCode = "// Extract into a reusable method\nprivate void ExtractedMethod() {\n    // Common logic here\n}",
+                    Reason = "Duplicate code increases maintenance burden. Changes must be made in multiple places, increasing the risk of bugs.",
+                    Benefits = "Single source of truth, easier maintenance, reduced code size.",
+                    Priority = duplicate.Value.Count > 2 ? SeverityLevel.High : SeverityLevel.Medium,
+                    ImprovementAreas = new List<string> { "Maintainability", "DRY Principle" }
+                });
+                break; // Only report first duplicate
+            }
+
+            // Check for long parameter lists
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                var paramCount = line.Count(c => c == ',');
+                if ((line.Contains("function ") || line.Contains("public ") || line.Contains("private ")) &&
+                    line.Contains("(") && paramCount > 4)
+                {
+                    var (snippet, startLine, endLine) = GetCodeSnippetWithRange(linesArray, i + 1);
+                    refactorings.Add(new Refactoring
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        FilePath = file.FilePath,
+                        LineNumber = startLine,
+                        EndLineNumber = endLine,
+                        RefactoringType = "Introduce Parameter Object",
+                        Title = "Long Parameter List",
+                        Description = $"This method has {paramCount + 1} parameters, making it hard to use and understand.",
+                        CurrentCode = snippet,
+                        SuggestedCode = "// Create a parameter object class\nclass MethodParameters {\n    // Group related parameters\n}",
+                        Reason = "Long parameter lists are hard to remember and often indicate that the method is doing too much.",
+                        Benefits = "Clearer method signature, easier to add new parameters, better encapsulation.",
+                        Priority = SeverityLevel.Medium,
+                        ImprovementAreas = new List<string> { "Readability", "Maintainability", "API Design" }
+                    });
+                }
+            }
+        }
+
+        return refactorings;
+    }
+
+    /// <summary>
+    /// Detects code duplications across the project
+    /// </summary>
+    public async Task<List<CodeDuplication>> DetectCodeDuplicationsAsync(List<CodeFile> files, string? connectionId = null)
+    {
+        var provider = _configuration["AI:Provider"] ?? "Demo";
+
+        if (provider.Equals("Demo", StringComparison.OrdinalIgnoreCase))
+        {
+            if (connectionId != null)
+            {
+                await SendProgress(connectionId, 95, "Demo Mode: Analyzing code for duplications...");
+                await Task.Delay(1500);
+            }
+            return await Task.FromResult(GenerateMockDuplications(files));
+        }
+
+        var client = _agentFactory.CreateBugDetectionClient();
+        var duplications = new List<CodeDuplication>();
+
+        // Analyze all files together to find duplications
+        var filesText = string.Join("\n\n", files.Select(f =>
+            $"File: {f.FilePath}\n```\n{f.Content}\n```"));
+
+        var prompt = @$"Analyze the following code files to detect duplicate or redundant code across the project.
+Look for:
+- Exact duplicate code blocks
+- Similar methods with the same logic
+- Repeated functionality across different files
+- Duplicate utility functions or helpers
+- Copy-pasted code with minor variations
+
+For each duplication found, provide:
+1. The duplicated code snippet
+2. All locations where this code appears (file paths, start/end line numbers, method names, class names)
+3. Type of duplication (ExactMatch, StructuralMatch, LogicalMatch, FunctionalMatch, PartialMatch)
+4. Similarity percentage (0-100)
+5. Description of the duplication
+6. Suggestion for removing the duplication
+7. Impact level (Critical/High/Medium/Low)
+8. Refactoring options (e.g., 'Extract to utility method', 'Create base class', 'Use shared service')
+9. Estimated effort to fix
+
+Return results in JSON format as an array of objects with these fields:
+duplicatedCode, locations (array with filePath, startLine, endLine, methodName, className), type, similarityPercentage, description, suggestion, impact, refactoringOptions (array of strings), estimatedEffort.
+
+Files to analyze:
+{filesText}";
+
+        var messages = new List<ChatMessage>
+        {
+            new SystemChatMessage("You are a code duplication detection expert. Return duplication analysis in JSON format."),
+            new UserChatMessage(prompt)
+        };
+
+        await SendProgress(connectionId, 95, "AI analyzing entire project for code duplications...");
+
+        var completion = await client.CompleteChatAsync(messages);
+        var responseText = completion.Value.Content[0].Text;
+        duplications = ParseDuplicationsFromResponse(responseText);
+
+        await SendProgress(connectionId, 97, $"Duplication detection complete: Found {duplications.Count} duplications");
+
+        return duplications;
+    }
+
+    private List<CodeDuplication> ParseDuplicationsFromResponse(string response)
+    {
+        try
+        {
+            var jsonContent = ExtractJsonFromResponse(response);
+            var dtos = JsonSerializer.Deserialize<List<CodeDuplicationDto>>(jsonContent);
+
+            return dtos?.Select(dto => new CodeDuplication
+            {
+                Id = Guid.NewGuid().ToString(),
+                DuplicatedCode = dto.DuplicatedCode ?? "",
+                Locations = dto.Locations?.Select(loc => new DuplicationLocation
+                {
+                    FilePath = loc.FilePath ?? "",
+                    StartLine = loc.StartLine,
+                    EndLine = loc.EndLine,
+                    MethodName = loc.MethodName ?? "",
+                    ClassName = loc.ClassName ?? ""
+                }).ToList() ?? new List<DuplicationLocation>(),
+                Type = ParseDuplicationType(dto.Type),
+                LineCount = dto.DuplicatedCode?.Split('\n').Length ?? 0,
+                SimilarityPercentage = dto.SimilarityPercentage,
+                Description = dto.Description ?? "",
+                Suggestion = dto.Suggestion ?? "",
+                Impact = ParseSeverity(dto.Impact),
+                RefactoringOptions = dto.RefactoringOptions ?? new List<string>(),
+                EstimatedEffort = dto.EstimatedEffort ?? "Medium"
+            }).ToList() ?? new List<CodeDuplication>();
+        }
+        catch
+        {
+            return new List<CodeDuplication>();
+        }
+    }
+
+    private List<CodeDuplication> GenerateMockDuplications(List<CodeFile> files)
+    {
+        var duplications = new List<CodeDuplication>();
+        var random = new Random(42);
+
+        // Simulate finding duplications across files
+        if (files.Count >= 2)
+        {
+            // Example 1: Exact duplicate validation logic
+            var file1 = files[0];
+            var file2 = files.Count > 1 ? files[1] : files[0];
+
+            duplications.Add(new CodeDuplication
+            {
+                DuplicatedCode = @"if (input == null || input.trim() == '') {
+    throw new Error('Input cannot be empty');
+}",
+                Locations = new List<DuplicationLocation>
+                {
+                    new() { FilePath = file1.FilePath, StartLine = 45, EndLine = 47, MethodName = "validateInput", ClassName = "UserService" },
+                    new() { FilePath = file2.FilePath, StartLine = 123, EndLine = 125, MethodName = "checkData", ClassName = "DataValidator" }
+                },
+                Type = DuplicationType.ExactMatch,
+                LineCount = 3,
+                SimilarityPercentage = 100,
+                Description = "Exact duplicate validation logic found in 2 files",
+                Suggestion = "Extract this validation logic into a shared utility function to reduce code duplication and improve maintainability",
+                Impact = SeverityLevel.High,
+                RefactoringOptions = new List<string> { "Extract to utility method", "Create validation service", "Use decorator pattern" },
+                EstimatedEffort = "Low"
+            });
+
+            // Example 2: Similar API call patterns
+            if (files.Count >= 3)
+            {
+                var file3 = files[2];
+                duplications.Add(new CodeDuplication
+                {
+                    DuplicatedCode = @"try {
+    const response = await fetch(url);
+    const data = await response.json();
+    return data;
+} catch (error) {
+    console.error('API call failed:', error);
+    throw error;
+}",
+                    Locations = new List<DuplicationLocation>
+                    {
+                        new() { FilePath = file1.FilePath, StartLine = 78, EndLine = 85, MethodName = "getUserData", ClassName = "UserService" },
+                        new() { FilePath = file2.FilePath, StartLine = 156, EndLine = 163, MethodName = "getProducts", ClassName = "ProductService" },
+                        new() { FilePath = file3.FilePath, StartLine = 92, EndLine = 99, MethodName = "fetchOrders", ClassName = "OrderService" }
+                    },
+                    Type = DuplicationType.StructuralMatch,
+                    LineCount = 8,
+                    SimilarityPercentage = 95,
+                    Description = "Similar API call pattern repeated across 3 service files",
+                    Suggestion = "Create a base HTTP service class with a generic fetch method that all services can extend or use",
+                    Impact = SeverityLevel.Medium,
+                    RefactoringOptions = new List<string> { "Create base service class", "Extract to HTTP utility", "Use interceptor pattern" },
+                    EstimatedEffort = "Medium"
+                });
+            }
+
+            // Example 3: Duplicate data transformation logic
+            duplications.Add(new CodeDuplication
+            {
+                DuplicatedCode = @"const formatted = items.map(item => ({
+    id: item.id,
+    name: item.name,
+    displayValue: `${item.name} (${item.id})`
+}));",
+                Locations = new List<DuplicationLocation>
+                {
+                    new() { FilePath = file1.FilePath, StartLine = 234, EndLine = 238, MethodName = "formatUsers", ClassName = "UserHelper" },
+                    new() { FilePath = file2.FilePath, StartLine = 445, EndLine = 449, MethodName = "formatProducts", ClassName = "ProductHelper" }
+                },
+                Type = DuplicationType.LogicalMatch,
+                LineCount = 5,
+                SimilarityPercentage = 90,
+                Description = "Duplicate data transformation logic with the same structure",
+                Suggestion = "Create a generic formatting function that accepts the items array and field names as parameters",
+                Impact = SeverityLevel.Low,
+                RefactoringOptions = new List<string> { "Create generic formatter", "Use mapper utility", "Template method pattern" },
+                EstimatedEffort = "Low"
+            });
+        }
+
+        return duplications;
+    }
+
+    private DuplicationType ParseDuplicationType(string? type)
+    {
+        return type?.ToLower().Replace(" ", "") switch
+        {
+            "exactmatch" => DuplicationType.ExactMatch,
+            "structuralmatch" => DuplicationType.StructuralMatch,
+            "logicalmatch" => DuplicationType.LogicalMatch,
+            "functionalmatch" => DuplicationType.FunctionalMatch,
+            "partialmatch" => DuplicationType.PartialMatch,
+            _ => DuplicationType.StructuralMatch
+        };
+    }
+
     private List<Violation> ParseViolationsFromResponse(string response)
     {
         try
@@ -172,6 +678,7 @@ public class AIAnalysisService : IAIAnalysisService
             {
                 FilePath = dto.FilePath ?? "",
                 LineNumber = dto.LineNumber,
+                EndLineNumber = dto.EndLineNumber > 0 ? dto.EndLineNumber : dto.LineNumber,
                 RuleName = dto.RuleName ?? "Unknown Rule",
                 Description = dto.Description ?? "",
                 Type = ParseViolationType(dto.Type),
@@ -197,6 +704,7 @@ public class AIAnalysisService : IAIAnalysisService
             {
                 FilePath = dto.FilePath ?? "",
                 LineNumber = dto.LineNumber,
+                EndLineNumber = dto.EndLineNumber > 0 ? dto.EndLineNumber : dto.LineNumber,
                 Title = dto.Title ?? "Untitled Bug",
                 Description = dto.Description ?? "",
                 RootCause = dto.RootCause ?? "",
@@ -258,6 +766,7 @@ public class AIAnalysisService : IAIAnalysisService
     {
         public string? FilePath { get; set; }
         public int LineNumber { get; set; }
+        public int EndLineNumber { get; set; }
         public string? RuleName { get; set; }
         public string? Description { get; set; }
         public string? Type { get; set; }
@@ -270,6 +779,7 @@ public class AIAnalysisService : IAIAnalysisService
     {
         public string? FilePath { get; set; }
         public int LineNumber { get; set; }
+        public int EndLineNumber { get; set; }
         public string? Title { get; set; }
         public string? Description { get; set; }
         public string? RootCause { get; set; }
@@ -280,24 +790,170 @@ public class AIAnalysisService : IAIAnalysisService
         public string? SuggestedFix { get; set; }
     }
 
+    private class RefactoringDto
+    {
+        public string? FilePath { get; set; }
+        public int LineNumber { get; set; }
+        public int EndLineNumber { get; set; }
+        public string? RefactoringType { get; set; }
+        public string? Title { get; set; }
+        public string? Description { get; set; }
+        public string? CurrentCode { get; set; }
+        public string? SuggestedCode { get; set; }
+        public string? Reason { get; set; }
+        public string? Benefits { get; set; }
+        public string? Priority { get; set; }
+        public List<string>? ImprovementAreas { get; set; }
+    }
+
+    private class CodeDuplicationDto
+    {
+        public string? DuplicatedCode { get; set; }
+        public List<DuplicationLocationDto>? Locations { get; set; }
+        public string? Type { get; set; }
+        public double SimilarityPercentage { get; set; }
+        public string? Description { get; set; }
+        public string? Suggestion { get; set; }
+        public string? Impact { get; set; }
+        public List<string>? RefactoringOptions { get; set; }
+        public string? EstimatedEffort { get; set; }
+    }
+
+    private class DuplicationLocationDto
+    {
+        public string? FilePath { get; set; }
+        public int StartLine { get; set; }
+        public int EndLine { get; set; }
+        public string? MethodName { get; set; }
+        public string? ClassName { get; set; }
+    }
+
     private List<Violation> GenerateMockViolations(List<CodeFile> files, List<Standard> standards)
     {
         var violations = new List<Violation>();
         var random = new Random(42); // Fixed seed for consistent results
 
-        foreach (var file in files.Take(5))
+        // Analyze each file for potential violations
+        foreach (var file in files.Where(f => f.FileType != FileType.Markdown && f.Content.Length > 50))
         {
-            violations.Add(new Violation
+            var fileContent = file.Content.ToLower();
+            var lines = file.Content.Split('\n');
+
+            // Naming convention violations
+            if (fileContent.Contains("_") && (fileContent.Contains("var ") || fileContent.Contains("public ") || fileContent.Contains("private ")))
             {
-                FilePath = file.FilePath,
-                LineNumber = random.Next(1, Math.Max(2, file.LineCount)),
-                RuleName = standards.FirstOrDefault()?.Name ?? "Naming Convention",
-                Description = $"Variable naming does not follow {standards.FirstOrDefault()?.Name ?? "standard naming"} convention",
-                Type = ViolationType.NamingConvention,
-                Severity = SeverityLevel.Medium,
-                CodeSnippet = "var user_name = \"John\";",
-                SuggestedFix = "var userName = \"John\";"
-            });
+                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
+                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+                violations.Add(new Violation
+                {
+                    FilePath = file.FilePath,
+                    LineNumber = startLine,
+                    EndLineNumber = endLine,
+                    RuleName = "Naming Convention Standard",
+                    Description = "Variable or method naming does not follow camelCase/PascalCase convention",
+                    Type = ViolationType.NamingConvention,
+                    Severity = SeverityLevel.Medium,
+                    CodeSnippet = snippet,
+                    SuggestedFix = "Use camelCase for variables and PascalCase for classes/methods"
+                });
+            }
+
+            // Missing error handling
+            if ((fileContent.Contains("try") && !fileContent.Contains("catch")) ||
+                (!fileContent.Contains("try") && fileContent.Contains("await") && fileContent.Contains("async")))
+            {
+                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
+                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+                violations.Add(new Violation
+                {
+                    FilePath = file.FilePath,
+                    LineNumber = startLine,
+                    EndLineNumber = endLine,
+                    RuleName = "Error Handling Required",
+                    Description = "Asynchronous operations should include proper error handling",
+                    Type = ViolationType.ErrorHandling,
+                    Severity = SeverityLevel.High,
+                    CodeSnippet = snippet,
+                    SuggestedFix = "Wrap async operations in try-catch blocks"
+                });
+            }
+
+            // Missing documentation
+            if ((fileContent.Contains("public class") || fileContent.Contains("public interface")) &&
+                !fileContent.Contains("///") && !fileContent.Contains("/**"))
+            {
+                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, 1);
+                violations.Add(new Violation
+                {
+                    FilePath = file.FilePath,
+                    LineNumber = startLine,
+                    EndLineNumber = endLine,
+                    RuleName = "Documentation Required",
+                    Description = "Public classes and interfaces should have XML documentation comments",
+                    Type = ViolationType.Documentation,
+                    Severity = SeverityLevel.Low,
+                    CodeSnippet = snippet,
+                    SuggestedFix = "Add /// <summary> documentation comments"
+                });
+            }
+
+            // Hardcoded strings/configuration
+            if (fileContent.Contains("\"localhost\"") || fileContent.Contains("\"127.0.0.1\"") ||
+                fileContent.Contains("\"password\"") || fileContent.Contains("connectionstring"))
+            {
+                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
+                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+                violations.Add(new Violation
+                {
+                    FilePath = file.FilePath,
+                    LineNumber = startLine,
+                    EndLineNumber = endLine,
+                    RuleName = "Configuration Management",
+                    Description = "Hardcoded configuration values should be moved to configuration files",
+                    Type = ViolationType.Security,
+                    Severity = SeverityLevel.Critical,
+                    CodeSnippet = snippet,
+                    SuggestedFix = "Use IConfiguration or environment variables"
+                });
+            }
+
+            // Performance: String concatenation in loops
+            if (fileContent.Contains("for") && fileContent.Contains("+=") && fileContent.Contains("string"))
+            {
+                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
+                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+                violations.Add(new Violation
+                {
+                    FilePath = file.FilePath,
+                    LineNumber = startLine,
+                    EndLineNumber = endLine,
+                    RuleName = "Performance Best Practice",
+                    Description = "String concatenation in loops causes performance issues",
+                    Type = ViolationType.Performance,
+                    Severity = SeverityLevel.Medium,
+                    CodeSnippet = snippet,
+                    SuggestedFix = "Use StringBuilder for string concatenation in loops"
+                });
+            }
+        }
+
+        // Add some general violations if none were found
+        if (violations.Count < 3)
+        {
+            foreach (var file in files.Take(3))
+            {
+                violations.Add(new Violation
+                {
+                    FilePath = file.FilePath,
+                    LineNumber = random.Next(1, Math.Max(2, file.LineCount)),
+                    RuleName = standards.FirstOrDefault()?.Name ?? "Code Quality Standard",
+                    Description = "Code could be improved to follow best practices",
+                    Type = ViolationType.BestPractice,
+                    Severity = SeverityLevel.Low,
+                    CodeSnippet = "Review code for potential improvements",
+                    SuggestedFix = "Follow established coding standards"
+                });
+            }
         }
 
         return violations;
@@ -308,29 +964,307 @@ public class AIAnalysisService : IAIAnalysisService
         var bugs = new List<Bug>();
         var random = new Random(42);
 
-        foreach (var file in files.Take(3))
+        // Analyze each file for potential bugs
+        foreach (var file in files.Where(f => f.FileType != FileType.Markdown && f.Content.Length > 50))
         {
-            bugs.Add(new Bug
+            var fileContent = file.Content.ToLower();
+            var lines = file.Content.Split('\n');
+
+            // Null reference potential
+            if (fileContent.Contains(".") && !fileContent.Contains("?.") &&
+                (fileContent.Contains("var ") || fileContent.Contains("return ")))
             {
-                FilePath = file.FilePath,
-                LineNumber = random.Next(1, Math.Max(2, file.LineCount)),
-                Title = "Potential Null Reference Exception",
-                Description = "Object may be null when accessed",
-                RootCause = "Missing null check before accessing object property",
-                Impact = "Application may crash with NullReferenceException at runtime",
-                Severity = SeverityLevel.High,
-                CodeSnippet = "var result = user.Name.ToUpper();",
-                ReproductionSteps = new List<string>
+                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
+                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+                bugs.Add(new Bug
                 {
-                    "Call the method with a null user object",
-                    "Access the Name property",
-                    "NullReferenceException is thrown"
-                },
-                SuggestedFix = "var result = user?.Name?.ToUpper() ?? string.Empty;"
-            });
+                    FilePath = file.FilePath,
+                    LineNumber = startLine,
+                    EndLineNumber = endLine,
+                    Title = "Potential Null Reference Exception",
+                    Description = "Object may be null when accessed without null checking",
+                    RootCause = "Missing null check before accessing object property or method",
+                    Impact = "Application may crash with NullReferenceException at runtime, causing service interruption",
+                    Severity = SeverityLevel.High,
+                    CodeSnippet = snippet,
+                    ReproductionSteps = new List<string>
+                    {
+                        "Call the method with a null object",
+                        "Access the property or method without null check",
+                        "NullReferenceException is thrown"
+                    },
+                    SuggestedFix = "Use null-conditional operator (?.) or add explicit null checks"
+                });
+            }
+
+            // Unhandled async exceptions
+            if (fileContent.Contains("async") && fileContent.Contains("await") &&
+                !fileContent.Contains("try") && !fileContent.Contains("catch"))
+            {
+                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
+                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+                bugs.Add(new Bug
+                {
+                    FilePath = file.FilePath,
+                    LineNumber = startLine,
+                    EndLineNumber = endLine,
+                    Title = "Unhandled Async Exception",
+                    Description = "Asynchronous operation lacks proper exception handling",
+                    RootCause = "Async method does not handle potential exceptions from awaited operations",
+                    Impact = "Unhandled exceptions can crash the application or leave it in an inconsistent state",
+                    Severity = SeverityLevel.Critical,
+                    CodeSnippet = snippet,
+                    ReproductionSteps = new List<string>
+                    {
+                        "Trigger the async operation",
+                        "Cause an exception in the awaited task",
+                        "Exception propagates without handling"
+                    },
+                    SuggestedFix = "Wrap async operations in try-catch blocks or use global exception handlers"
+                });
+            }
+
+            // Resource disposal issues
+            if ((fileContent.Contains("new stream") || fileContent.Contains("new file") ||
+                 fileContent.Contains("httpclient")) && !fileContent.Contains("using") && !fileContent.Contains("dispose"))
+            {
+                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
+                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+                bugs.Add(new Bug
+                {
+                    FilePath = file.FilePath,
+                    LineNumber = startLine,
+                    EndLineNumber = endLine,
+                    Title = "Resource Leak - Missing Disposal",
+                    Description = "Unmanaged resources are not properly disposed",
+                    RootCause = "IDisposable objects created without using statement or explicit disposal",
+                    Impact = "Memory leaks and resource exhaustion over time, degraded performance",
+                    Severity = SeverityLevel.High,
+                    CodeSnippet = snippet,
+                    ReproductionSteps = new List<string>
+                    {
+                        "Create resource without using statement",
+                        "Run application over extended period",
+                        "Observe memory/resource leaks"
+                    },
+                    SuggestedFix = "Use 'using' statement or implement IDisposable pattern"
+                });
+            }
+
+            // SQL Injection vulnerability
+            if (fileContent.Contains("select") && fileContent.Contains("+") &&
+                (fileContent.Contains("execute") || fileContent.Contains("query")))
+            {
+                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
+                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+                bugs.Add(new Bug
+                {
+                    FilePath = file.FilePath,
+                    LineNumber = startLine,
+                    EndLineNumber = endLine,
+                    Title = "SQL Injection Vulnerability",
+                    Description = "Dynamic SQL construction using string concatenation",
+                    RootCause = "User input concatenated directly into SQL queries without parameterization",
+                    Impact = "Critical security vulnerability - attackers can execute arbitrary SQL commands",
+                    Severity = SeverityLevel.Critical,
+                    CodeSnippet = snippet,
+                    ReproductionSteps = new List<string>
+                    {
+                        "Input malicious SQL in user-provided data",
+                        "SQL gets executed with injected code",
+                        "Unauthorized data access or modification"
+                    },
+                    SuggestedFix = "Use parameterized queries or ORM (Entity Framework)"
+                });
+            }
+
+            // Thread safety issues
+            if (fileContent.Contains("static") && fileContent.Contains("list<") &&
+                !fileContent.Contains("readonly") && !fileContent.Contains("concurrent"))
+            {
+                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
+                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+                bugs.Add(new Bug
+                {
+                    FilePath = file.FilePath,
+                    LineNumber = startLine,
+                    EndLineNumber = endLine,
+                    Title = "Thread Safety Issue - Shared Mutable State",
+                    Description = "Static mutable collection accessed without synchronization",
+                    RootCause = "Non-thread-safe collection used in multi-threaded context",
+                    Impact = "Race conditions, data corruption, unpredictable behavior in concurrent scenarios",
+                    Severity = SeverityLevel.High,
+                    CodeSnippet = snippet,
+                    ReproductionSteps = new List<string>
+                    {
+                        "Access static collection from multiple threads",
+                        "Perform concurrent read/write operations",
+                        "Experience data corruption or exceptions"
+                    },
+                    SuggestedFix = "Use ConcurrentDictionary/ConcurrentBag or add proper locking"
+                });
+            }
+        }
+
+        // Add some general bugs if none were found
+        if (bugs.Count < 2)
+        {
+            foreach (var file in files.Take(2))
+            {
+                bugs.Add(new Bug
+                {
+                    FilePath = file.FilePath,
+                    LineNumber = random.Next(1, Math.Max(2, file.LineCount)),
+                    Title = "Code Quality Issue",
+                    Description = "Potential code improvement opportunity detected",
+                    RootCause = "Code pattern that could lead to issues",
+                    Impact = "May cause issues under certain conditions",
+                    Severity = SeverityLevel.Medium,
+                    CodeSnippet = "Review code implementation",
+                    ReproductionSteps = new List<string> { "Review code logic", "Test edge cases" },
+                    SuggestedFix = "Review and refactor as needed"
+                });
+            }
         }
 
         return bugs;
+    }
+
+    /// <summary>
+    /// Extracts code snippet with intelligent context detection
+    /// Returns tuple of (snippet, startLine, endLine)
+    /// </summary>
+    private (string snippet, int startLine, int endLine) GetCodeSnippetWithRange(string[] lines, int lineNumber)
+    {
+        if (lines.Length == 0) return ("// No code available", lineNumber, lineNumber);
+
+        var index = Math.Max(0, Math.Min(lineNumber - 1, lines.Length - 1));
+        var currentLine = lines[index].Trim();
+
+        // Check if we're on a single-line change (simple statement)
+        if (IsSingleLineChange(currentLine))
+        {
+            return (currentLine, lineNumber, lineNumber);
+        }
+
+        // Extract the entire method or code block
+        var (startIndex, endIndex) = FindCodeBlock(lines, index);
+        var snippetLines = new List<string>();
+
+        for (int i = startIndex; i <= endIndex && i < lines.Length; i++)
+        {
+            snippetLines.Add(lines[i]);
+        }
+
+        return (string.Join("\n", snippetLines), startIndex + 1, endIndex + 1);
+    }
+
+    private bool IsSingleLineChange(string line)
+    {
+        // Single line statements/declarations
+        var singleLinePatterns = new[]
+        {
+            "var ", "const ", "let ", "return ",
+            "throw ", "break;", "continue;",
+            "import ", "using ", "};", ");"
+        };
+
+        return singleLinePatterns.Any(pattern =>
+            line.Contains(pattern, StringComparison.OrdinalIgnoreCase)) &&
+            line.Length < 150 &&
+            !line.Contains("{") &&
+            !line.Contains("(") ||
+            line.EndsWith(";");
+    }
+
+    private (int startIndex, int endIndex) FindCodeBlock(string[] lines, int currentIndex)
+    {
+        int startIndex = currentIndex;
+        int endIndex = currentIndex;
+        int braceCount = 0;
+        bool inMethod = false;
+
+        // Look backwards to find method or block start
+        for (int i = currentIndex; i >= 0; i--)
+        {
+            var line = lines[i].Trim();
+
+            // Method declaration patterns
+            if (line.Contains("public ") || line.Contains("private ") ||
+                line.Contains("protected ") || line.Contains("async ") ||
+                line.Contains("function ") || line.Contains("def "))
+            {
+                startIndex = i;
+                inMethod = true;
+                break;
+            }
+
+            // Opening brace
+            if (line.Contains("{"))
+            {
+                startIndex = i;
+                break;
+            }
+
+            // Stop at previous closing brace
+            if (line.Contains("}"))
+            {
+                startIndex = i + 1;
+                break;
+            }
+
+            // Don't go too far back (max 50 lines)
+            if (currentIndex - i > 50)
+            {
+                startIndex = Math.Max(0, currentIndex - 5);
+                break;
+            }
+        }
+
+        // Look forward to find method or block end
+        for (int i = currentIndex; i < lines.Length; i++)
+        {
+            var line = lines[i].Trim();
+
+            if (line.Contains("{")) braceCount++;
+            if (line.Contains("}")) braceCount--;
+
+            // Found matching closing brace
+            if (inMethod && braceCount == 0 && line.Contains("}"))
+            {
+                endIndex = i;
+                break;
+            }
+
+            // Stop at next method declaration
+            if (i > currentIndex && (line.Contains("public ") || line.Contains("private ")))
+            {
+                endIndex = i - 1;
+                break;
+            }
+
+            // Don't go too far forward (max 50 lines)
+            if (i - currentIndex > 50)
+            {
+                endIndex = Math.Min(lines.Length - 1, currentIndex + 5);
+                break;
+            }
+        }
+
+        // Ensure we have at least a few lines of context
+        if (!inMethod && endIndex - startIndex < 3)
+        {
+            startIndex = Math.Max(0, currentIndex - 2);
+            endIndex = Math.Min(lines.Length - 1, currentIndex + 2);
+        }
+
+        return (startIndex, endIndex);
+    }
+
+    private string GetCodeSnippet(string[] lines, int lineNumber)
+    {
+        var (snippet, _, _) = GetCodeSnippetWithRange(lines, lineNumber);
+        return snippet;
     }
 
     private async Task SendProgress(string? connectionId, int progress, string message)
@@ -607,7 +1541,16 @@ Provide a detailed analysis including:
             { "notification", "Notifications" },
             { "workflow", "Workflow Management" },
             { "task", "Task Management" },
-            { "scheduler", "Job Scheduling" }
+            { "scheduler", "Job Scheduling" },
+            { "violation", "Standards Compliance Checking" },
+            { "bug", "Bug Detection" },
+            { "ai", "AI/ML Processing" },
+            { "openai", "AI Integration" },
+            { "documentation", "Documentation Management" },
+            { "standard", "Standards Management" },
+            { "file", "File Processing" },
+            { "upload", "File Upload Handling" },
+            { "git", "Version Control Integration" }
         };
 
         var detectedLogic = new List<string>();
@@ -616,49 +1559,119 @@ Provide a detailed analysis including:
         {
             var hasFolder = folderStructure.Keys.Any(f => f.ToLowerInvariant().Contains(kvp.Key));
             var hasFiles = files.Any(f => f.FilePath.ToLowerInvariant().Contains(kvp.Key));
+            var hasCodeReference = files.Any(f => f.Content.ToLowerInvariant().Contains(kvp.Key));
 
-            if (hasFolder || hasFiles)
+            if (hasFolder || hasFiles || hasCodeReference)
                 detectedLogic.Add(kvp.Value);
         }
 
+        // Add detailed business logic by analyzing actual code content
+        var codeAnalysis = new List<string>();
+
+        foreach (var file in files.Where(f => f.FileType != FileType.Markdown).Take(50))
+        {
+            var content = file.Content.ToLowerInvariant();
+
+            // Detect API endpoints and their purposes
+            if (content.Contains("[httppost]") || content.Contains("[httpget]"))
+            {
+                if (content.Contains("analyze") || content.Contains("analysis"))
+                    codeAnalysis.Add("Code Analysis Operations");
+                if (content.Contains("report"))
+                    codeAnalysis.Add("Report Generation");
+                if (content.Contains("upload") || content.Contains("repository"))
+                    codeAnalysis.Add("File/Repository Upload Management");
+            }
+
+            // Detect data processing logic
+            if (content.Contains("async") && content.Contains("await"))
+            {
+                if (content.Contains("detect") || content.Contains("find"))
+                    codeAnalysis.Add("Pattern Detection & Analysis");
+            }
+
+            // Detect external service integrations
+            if (content.Contains("httpclient") || content.Contains("api"))
+                codeAnalysis.Add("External API Integration");
+        }
+
+        detectedLogic.AddRange(codeAnalysis.Distinct());
+
         return detectedLogic.Any()
-            ? string.Join(", ", detectedLogic.Distinct())
-            : "General Purpose Application";
+            ? string.Join(", ", detectedLogic.Distinct().Take(10))
+            : "General Purpose Application with Custom Business Logic";
     }
 
     private string GenerateProjectDescription(string techStack, string architecture, string businessLogic)
     {
-        return $"A {architecture}-based application built with {techStack}. " +
-               $"The project implements {businessLogic} functionality with a focus on maintainability and scalability.";
+        return $"This is a {architecture}-based application built using {techStack}. " +
+               $"The system implements comprehensive functionality including: {businessLogic}. " +
+               $"The project follows modern development practices with a focus on maintainability, scalability, and code quality. " +
+               $"It includes automated analysis capabilities, real-time processing, and extensive file handling features.";
     }
 
     private string GenerateCoreFunctionality(List<CodeFile> files, Dictionary<string, int> folderStructure)
     {
         var functionalities = new List<string>();
 
+        // Analyze actual code content for functionality
+        var codeContent = string.Join(" ", files.Take(100).Select(f => f.Content.ToLowerInvariant()));
+
         // Check for API/Web functionality
-        if (files.Any(f => f.Content.Contains("[ApiController]") || f.Content.Contains("@RestController") || f.Content.Contains("app.get(")))
-            functionalities.Add("RESTful API Services");
+        if (codeContent.Contains("[apicontroller]") || codeContent.Contains("@restcontroller") ||
+            codeContent.Contains("app.get(") || codeContent.Contains("router."))
+            functionalities.Add("RESTful API Services with multiple endpoints");
 
         // Check for database operations
-        if (files.Any(f => f.Content.Contains("DbContext") || f.Content.Contains("@Entity") || f.Content.Contains("SELECT") || f.Content.Contains("INSERT")))
-            functionalities.Add("Database Operations");
+        if (codeContent.Contains("dbcontext") || codeContent.Contains("@entity") ||
+            codeContent.Contains("select ") || codeContent.Contains("insert "))
+            functionalities.Add("Database Operations & Data Persistence");
 
         // Check for UI
-        if (files.Any(f => f.FilePath.EndsWith(".html") || f.FilePath.EndsWith(".jsx") || f.FilePath.EndsWith(".tsx") || f.FilePath.EndsWith(".vue")))
-            functionalities.Add("User Interface");
+        if (files.Any(f => f.FilePath.EndsWith(".html") || f.FilePath.EndsWith(".jsx") ||
+                          f.FilePath.EndsWith(".tsx") || f.FilePath.EndsWith(".vue") ||
+                          f.FilePath.EndsWith(".cshtml")))
+            functionalities.Add("Interactive User Interface with real-time updates");
 
         // Check for authentication
-        if (files.Any(f => f.Content.Contains("authentication") || f.Content.Contains("jwt") || f.Content.Contains("login") || f.Content.Contains("authorize")))
-            functionalities.Add("Authentication & Authorization");
+        if (codeContent.Contains("authentication") || codeContent.Contains("jwt") ||
+            codeContent.Contains("login") || codeContent.Contains("authorize"))
+            functionalities.Add("User Authentication & Authorization");
 
         // Check for external integrations
-        if (files.Any(f => f.Content.Contains("HttpClient") || f.Content.Contains("axios") || f.Content.Contains("fetch")))
-            functionalities.Add("External API Integration");
+        if (codeContent.Contains("httpclient") || codeContent.Contains("axios") || codeContent.Contains("fetch("))
+            functionalities.Add("External API Integration & Data Synchronization");
+
+        // Check for file processing
+        if (codeContent.Contains("filestream") || codeContent.Contains("zipfile") ||
+            codeContent.Contains("upload") || codeContent.Contains("iformfile"))
+            functionalities.Add("File Upload, Processing & Storage");
+
+        // Check for async/background processing
+        if (codeContent.Contains("async task") || codeContent.Contains("background"))
+            functionalities.Add("Asynchronous Background Processing");
+
+        // Check for real-time communication
+        if (codeContent.Contains("signalr") || codeContent.Contains("websocket"))
+            functionalities.Add("Real-Time Communication & Progress Tracking");
+
+        // Check for AI/ML features
+        if (codeContent.Contains("openai") || codeContent.Contains("ai") ||
+            codeContent.Contains("chatgpt") || codeContent.Contains("machinelearning"))
+            functionalities.Add("AI-Powered Code Analysis & Recommendations");
+
+        // Check for reporting
+        if (codeContent.Contains("report") || codeContent.Contains("export") || codeContent.Contains("pdf"))
+            functionalities.Add("Report Generation & Export");
+
+        // Check for version control
+        if (codeContent.Contains("libgit2") || codeContent.Contains("gitrepository") ||
+            files.Any(f => f.FilePath.Contains("git", StringComparison.OrdinalIgnoreCase)))
+            functionalities.Add("Git Repository Integration & Cloning");
 
         return functionalities.Any()
-            ? string.Join(", ", functionalities)
-            : "Core application logic and data processing";
+            ? string.Join("; ", functionalities)
+            : "Core application logic, data processing, and business workflow management";
     }
 
     private List<string> IdentifyKeyFeatures(List<CodeFile> files, Dictionary<string, int> folderStructure)

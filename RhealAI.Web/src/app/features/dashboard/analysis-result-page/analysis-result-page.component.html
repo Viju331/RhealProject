@@ -1,0 +1,476 @@
+<div class="analysis-result-page" *ngIf="!isLoading; else loading">
+    <!-- Page Header -->
+    <div class="page-header-section">
+        <div>
+            <h1 class="page-header">Analysis Results</h1>
+            <p class="page-subtitle">{{ repository?.name }}</p>
+        </div>
+        <div class="header-actions">
+            <button mat-raised-button color="primary" [routerLink]="['/standards', repository?.id]">
+                <mat-icon>rule</mat-icon>
+                View Standards
+            </button>
+            <button mat-raised-button (click)="exportReport('json')">
+                <mat-icon>download</mat-icon>
+                Export Report
+            </button>
+        </div>
+    </div>
+
+    <!-- Project Summary Card -->
+    <div class="glass-card project-summary-card" *ngIf="report?.projectSummary">
+        <div class="project-summary-header">
+            <mat-icon class="summary-icon">auto_awesome</mat-icon>
+            <h2 class="summary-title">AI-Generated Project Summary</h2>
+        </div>
+
+        <div class="project-summary-content">
+            <div class="summary-section">
+                <h3 class="summary-section-title">
+                    <mat-icon>description</mat-icon>
+                    Description
+                </h3>
+                <p class="summary-text">{{ report?.projectSummary?.description }}</p>
+            </div>
+
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <mat-icon class="item-icon">layers</mat-icon>
+                    <div class="item-content">
+                        <span class="item-label">Architecture</span>
+                        <span class="item-value">{{ report?.projectSummary?.architecture }}</span>
+                    </div>
+                </div>
+
+                <div class="summary-item">
+                    <mat-icon class="item-icon">code</mat-icon>
+                    <div class="item-content">
+                        <span class="item-label">Technology Stack</span>
+                        <span class="item-value">{{ report?.projectSummary?.technologyStack }}</span>
+                    </div>
+                </div>
+
+                <div class="summary-item">
+                    <mat-icon class="item-icon">language</mat-icon>
+                    <div class="item-content">
+                        <span class="item-label">Primary Language</span>
+                        <span class="item-value">{{ report?.projectSummary?.primaryLanguage }}</span>
+                    </div>
+                </div>
+
+                <div class="summary-item">
+                    <mat-icon class="item-icon">business_center</mat-icon>
+                    <div class="item-content">
+                        <span class="item-label">Business Logic</span>
+                        <span class="item-value">{{ report?.projectSummary?.businessLogic }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="summary-section" *ngIf="(report?.projectSummary?.keyFeatures?.length || 0) > 0">
+                <h3 class="summary-section-title">
+                    <mat-icon>star</mat-icon>
+                    Key Features
+                </h3>
+                <div class="features-chips">
+                    <span class="feature-chip" *ngFor="let feature of report?.projectSummary?.keyFeatures">
+                        <mat-icon>check_circle</mat-icon>
+                        {{ feature }}
+                    </span>
+                </div>
+            </div>
+
+            <div class="summary-section" *ngIf="(report?.projectSummary?.mainComponents?.length || 0) > 0">
+                <h3 class="summary-section-title">
+                    <mat-icon>widgets</mat-icon>
+                    Main Components
+                </h3>
+                <div class="components-list">
+                    <span class="component-tag" *ngFor="let component of report?.projectSummary?.mainComponents">
+                        {{ component }}
+                    </span>
+                </div>
+            </div>
+
+            <div class="summary-section" *ngIf="(report?.projectSummary?.dependencies?.length || 0) > 0">
+                <h3 class="summary-section-title">
+                    <mat-icon>extension</mat-icon>
+                    Dependencies
+                </h3>
+                <div class="dependencies-list">
+                    <span class="dependency-chip" *ngFor="let dep of report?.projectSummary?.dependencies">
+                        {{ dep }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Overview -->
+    <div class="stats-grid">
+        <app-stat-card title="Total Files Analyzed" [value]="report?.totalFiles || 0" icon="folder"
+            color="info"></app-stat-card>
+
+        <app-stat-card title="Files with Violations" [value]="report?.filesWithViolations || 0" icon="description"
+            color="warning"></app-stat-card>
+
+        <app-stat-card title="Files with Bugs" [value]="report?.filesWithBugs || 0" icon="description"
+            color="danger"></app-stat-card>
+
+        <app-stat-card title="Files Need Refactoring" [value]="report?.filesNeedingRefactoring || 0" icon="build"
+            color="info"></app-stat-card>
+
+        <app-stat-card title="Total Violations" [value]="report?.totalViolations || 0" icon="warning"
+            color="warning"></app-stat-card>
+
+        <app-stat-card title="Total Bugs" [value]="report?.totalBugs || 0" icon="bug_report"
+            color="danger"></app-stat-card>
+
+        <app-stat-card title="Refactorings Suggested" [value]="report?.totalRefactorings || 0" icon="auto_fix_high"
+            color="success"></app-stat-card>
+
+        <app-stat-card title="Code Duplications" [value]="report?.totalDuplications || 0" icon="content_copy"
+            color="warning"></app-stat-card>
+
+        <app-stat-card title="Duplicated Lines" [value]="report?.totalDuplicatedLines || 0" icon="notes"
+            color="info"></app-stat-card>
+
+        <app-stat-card title="Analysis Time" [value]="report?.executionTime || '0s'" icon="schedule"
+            color="success"></app-stat-card>
+    </div>
+
+    <!-- Severity Distribution -->
+    <div class="content-grid">
+        <!-- Violations by Severity -->
+        <div class="glass-card severity-card">
+            <h3 class="card-title">
+                <mat-icon>warning</mat-icon>
+                Violations by Severity
+            </h3>
+            <div class="severity-list">
+                <div class="severity-item">
+                    <app-severity-badge [severity]="SeverityLevel.Critical"
+                        [count]="getSeverityCount(SeverityLevel.Critical, 'violations')"></app-severity-badge>
+                    <div class="severity-bar">
+                        <div class="bar-fill critical"
+                            [style.width.%]="(getSeverityCount(SeverityLevel.Critical, 'violations') / (report?.totalViolations || 1)) * 100">
+                        </div>
+                    </div>
+                </div>
+                <div class="severity-item">
+                    <app-severity-badge [severity]="SeverityLevel.High"
+                        [count]="getSeverityCount(SeverityLevel.High, 'violations')"></app-severity-badge>
+                    <div class="severity-bar">
+                        <div class="bar-fill high"
+                            [style.width.%]="(getSeverityCount(SeverityLevel.High, 'violations') / (report?.totalViolations || 1)) * 100">
+                        </div>
+                    </div>
+                </div>
+                <div class="severity-item">
+                    <app-severity-badge [severity]="SeverityLevel.Medium"
+                        [count]="getSeverityCount(SeverityLevel.Medium, 'violations')"></app-severity-badge>
+                    <div class="severity-bar">
+                        <div class="bar-fill medium"
+                            [style.width.%]="(getSeverityCount(SeverityLevel.Medium, 'violations') / (report?.totalViolations || 1)) * 100">
+                        </div>
+                    </div>
+                </div>
+                <div class="severity-item">
+                    <app-severity-badge [severity]="SeverityLevel.Low"
+                        [count]="getSeverityCount(SeverityLevel.Low, 'violations')"></app-severity-badge>
+                    <div class="severity-bar">
+                        <div class="bar-fill low"
+                            [style.width.%]="(getSeverityCount(SeverityLevel.Low, 'violations') / (report?.totalViolations || 1)) * 100">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bugs by Severity -->
+        <div class="glass-card severity-card">
+            <h3 class="card-title">
+                <mat-icon>bug_report</mat-icon>
+                Bugs by Severity
+            </h3>
+            <div class="severity-list">
+                <div class="severity-item">
+                    <app-severity-badge [severity]="SeverityLevel.Critical"
+                        [count]="getSeverityCount(SeverityLevel.Critical, 'bugs')"></app-severity-badge>
+                    <div class="severity-bar">
+                        <div class="bar-fill critical"
+                            [style.width.%]="(getSeverityCount(SeverityLevel.Critical, 'bugs') / (report?.totalBugs || 1)) * 100">
+                        </div>
+                    </div>
+                </div>
+                <div class="severity-item">
+                    <app-severity-badge [severity]="SeverityLevel.High"
+                        [count]="getSeverityCount(SeverityLevel.High, 'bugs')"></app-severity-badge>
+                    <div class="severity-bar">
+                        <div class="bar-fill high"
+                            [style.width.%]="(getSeverityCount(SeverityLevel.High, 'bugs') / (report?.totalBugs || 1)) * 100">
+                        </div>
+                    </div>
+                </div>
+                <div class="severity-item">
+                    <app-severity-badge [severity]="SeverityLevel.Medium"
+                        [count]="getSeverityCount(SeverityLevel.Medium, 'bugs')"></app-severity-badge>
+                    <div class="severity-bar">
+                        <div class="bar-fill medium"
+                            [style.width.%]="(getSeverityCount(SeverityLevel.Medium, 'bugs') / (report?.totalBugs || 1)) * 100">
+                        </div>
+                    </div>
+                </div>
+                <div class="severity-item">
+                    <app-severity-badge [severity]="SeverityLevel.Low"
+                        [count]="getSeverityCount(SeverityLevel.Low, 'bugs')"></app-severity-badge>
+                    <div class="severity-bar">
+                        <div class="bar-fill low"
+                            [style.width.%]="(getSeverityCount(SeverityLevel.Low, 'bugs') / (report?.totalBugs || 1)) * 100">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Tables -->
+    <mat-tab-group class="details-tabs" (selectedTabChange)="onTabChange($event)">
+        <!-- Violations Tab -->
+        <mat-tab label="Violations ({{ rawViolations.length || allViolations.data.length }})">
+            <div class="tab-content">
+                <div class="table-container">
+                    <table mat-table [dataSource]="allViolations" class="violations-table">
+                        <ng-container matColumnDef="severity">
+                            <th mat-header-cell *matHeaderCellDef>Severity</th>
+                            <td mat-cell *matCellDef="let violation">
+                                <app-severity-badge [severity]="violation.severity"></app-severity-badge>
+                            </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="file">
+                            <th mat-header-cell *matHeaderCellDef>File</th>
+                            <td mat-cell *matCellDef="let violation"
+                                [matTooltip]="violation.fullPath || violation.filePath || 'N/A'"
+                                matTooltipPosition="above">
+                                {{ violation.fullPath || violation.filePath || 'N/A' }}
+                            </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="line">
+                            <th mat-header-cell *matHeaderCellDef>Line</th>
+                            <td mat-cell *matCellDef="let violation">{{ violation.lineNumber }}</td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="rule">
+                            <th mat-header-cell *matHeaderCellDef>Rule</th>
+                            <td mat-cell *matCellDef="let violation">{{ violation.ruleName }}</td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="description">
+                            <th mat-header-cell *matHeaderCellDef>Description</th>
+                            <td mat-cell *matCellDef="let violation">{{ violation.description }}</td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="actions">
+                            <th mat-header-cell *matHeaderCellDef>Actions</th>
+                            <td mat-cell *matCellDef="let violation">
+                                <button mat-icon-button color="primary" (click)="viewViolationDetails(violation)"
+                                    matTooltip="View details">
+                                    <mat-icon>visibility</mat-icon>
+                                </button>
+                            </td>
+                        </ng-container>
+
+                        <tr mat-header-row *matHeaderRowDef="violationColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: violationColumns;"></tr>
+                    </table>
+                    <mat-paginator #violationsPaginator [pageSizeOptions]="[10, 25, 50, 100]" [pageSize]="10"
+                        showFirstLastButtons aria-label="Select page of violations">
+                    </mat-paginator>
+                </div>
+            </div>
+        </mat-tab>
+
+        <!-- Bugs Tab -->
+        <mat-tab label="Bugs ({{ rawBugs.length || allBugs.data.length }})">
+            <div class="tab-content">
+                <div class="table-container">
+                    <table mat-table [dataSource]="allBugs" class="bugs-table">
+                        <ng-container matColumnDef="severity">
+                            <th mat-header-cell *matHeaderCellDef>Severity</th>
+                            <td mat-cell *matCellDef="let bug">
+                                <app-severity-badge [severity]="bug.severity"></app-severity-badge>
+                            </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="title">
+                            <th mat-header-cell *matHeaderCellDef>Title</th>
+                            <td mat-cell *matCellDef="let bug">{{ bug.title }}</td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="file">
+                            <th mat-header-cell *matHeaderCellDef>File</th>
+                            <td mat-cell *matCellDef="let bug" [matTooltip]="bug.fullPath || bug.filePath || 'N/A'"
+                                matTooltipPosition="above">
+                                {{ bug.fullPath || bug.filePath || 'N/A' }}
+                            </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="impact">
+                            <th mat-header-cell *matHeaderCellDef>Impact</th>
+                            <td mat-cell *matCellDef="let bug">{{ bug.impact }}</td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="actions">
+                            <th mat-header-cell *matHeaderCellDef>Actions</th>
+                            <td mat-cell *matCellDef="let bug">
+                                <button mat-icon-button color="primary" (click)="viewBugDetails(bug)"
+                                    matTooltip="View details">
+                                    <mat-icon>visibility</mat-icon>
+                                </button>
+                            </td>
+                        </ng-container>
+
+                        <tr mat-header-row *matHeaderRowDef="bugColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: bugColumns;"></tr>
+                    </table>
+                    <mat-paginator #bugsPaginator [pageSizeOptions]="[10, 25, 50, 100]" [pageSize]="10"
+                        showFirstLastButtons aria-label="Select page of bugs">
+                    </mat-paginator>
+                </div>
+            </div>
+        </mat-tab>
+
+        <!-- Refactorings Tab -->
+        <mat-tab label="Refactorings ({{ rawRefactorings.length || allRefactorings.data.length }})">
+            <div class="tab-content">
+                <div class="table-container">
+                    <table mat-table [dataSource]="allRefactorings" class="refactorings-table">
+                        <ng-container matColumnDef="priority">
+                            <th mat-header-cell *matHeaderCellDef>Priority</th>
+                            <td mat-cell *matCellDef="let refactoring">
+                                <app-severity-badge [severity]="refactoring.priority"></app-severity-badge>
+                            </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="type">
+                            <th mat-header-cell *matHeaderCellDef>Type</th>
+                            <td mat-cell *matCellDef="let refactoring">
+                                <span class="refactoring-type">{{ refactoring.refactoringType }}</span>
+                            </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="file">
+                            <th mat-header-cell *matHeaderCellDef>File</th>
+                            <td mat-cell *matCellDef="let refactoring"
+                                [matTooltip]="refactoring.fullPath || refactoring.filePath || 'N/A'"
+                                matTooltipPosition="above">
+                                {{ refactoring.fullPath || refactoring.filePath || 'N/A' }}
+                            </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="line">
+                            <th mat-header-cell *matHeaderCellDef>Line</th>
+                            <td mat-cell *matCellDef="let refactoring">{{ refactoring.lineNumber }}</td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="title">
+                            <th mat-header-cell *matHeaderCellDef>Issue</th>
+                            <td mat-cell *matCellDef="let refactoring">
+                                <div class="refactoring-title">{{ refactoring.title }}</div>
+                                <div class="refactoring-desc">{{ refactoring.description }}</div>
+                            </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="actions">
+                            <th mat-header-cell *matHeaderCellDef>Actions</th>
+                            <td mat-cell *matCellDef="let refactoring">
+                                <button mat-icon-button color="primary" [matTooltip]="'View details'"
+                                    (click)="viewRefactoringDetails(refactoring)">
+                                    <mat-icon>visibility</mat-icon>
+                                </button>
+                            </td>
+                        </ng-container>
+
+                        <tr mat-header-row *matHeaderRowDef="refactoringColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: refactoringColumns;"></tr>
+                    </table>
+                    <mat-paginator #refactoringsPaginator [pageSizeOptions]="[10, 25, 50, 100]" [pageSize]="10"
+                        showFirstLastButtons aria-label="Select page of refactorings">
+                    </mat-paginator>
+                </div>
+            </div>
+        </mat-tab>
+
+        <!-- Code Duplications Tab -->
+        <mat-tab label="Code Duplications ({{ rawDuplications.length || allDuplications.data.length }})">
+            <div class="tab-content">
+                <div class="table-container">
+                    <table mat-table [dataSource]="allDuplications" class="duplications-table">
+                        <ng-container matColumnDef="impact">
+                            <th mat-header-cell *matHeaderCellDef>Impact</th>
+                            <td mat-cell *matCellDef="let duplication">
+                                <app-severity-badge [severity]="duplication.impact"></app-severity-badge>
+                            </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="type">
+                            <th mat-header-cell *matHeaderCellDef>Type</th>
+                            <td mat-cell *matCellDef="let duplication">
+                                <span class="duplication-type">{{ formatDuplicationType(duplication.type) }}</span>
+                            </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="similarity">
+                            <th mat-header-cell *matHeaderCellDef>Similarity</th>
+                            <td mat-cell *matCellDef="let duplication">
+                                <span class="similarity-badge">{{ duplication.similarityPercentage }}%</span>
+                            </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="locations">
+                            <th mat-header-cell *matHeaderCellDef>Locations</th>
+                            <td mat-cell *matCellDef="let duplication">
+                                <span class="location-count">{{ duplication.locations.length }} files</span>
+                            </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="description">
+                            <th mat-header-cell *matHeaderCellDef>Description</th>
+                            <td mat-cell *matCellDef="let duplication">
+                                <div class="duplication-desc">{{ duplication.description }}</div>
+                            </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="effort">
+                            <th mat-header-cell *matHeaderCellDef>Effort</th>
+                            <td mat-cell *matCellDef="let duplication">
+                                <span class="effort-badge">{{ duplication.estimatedEffort }}</span>
+                            </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="actions">
+                            <th mat-header-cell *matHeaderCellDef>Actions</th>
+                            <td mat-cell *matCellDef="let duplication">
+                                <button mat-icon-button color="primary" [matTooltip]="'View details'"
+                                    (click)="viewDuplicationDetails(duplication)">
+                                    <mat-icon>visibility</mat-icon>
+                                </button>
+                            </td>
+                        </ng-container>
+
+                        <tr mat-header-row *matHeaderRowDef="duplicationColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: duplicationColumns;"></tr>
+                    </table> <mat-paginator #duplicationsPaginator [pageSizeOptions]="[10, 25, 50, 100]" [pageSize]="10"
+                        showFirstLastButtons aria-label="Select page of code duplications">
+                    </mat-paginator>
+                </div>
+            </div>
+        </mat-tab>
+    </mat-tab-group>
+</div>
+
+<ng-template #loading>
+    <app-loading-spinner message="Loading analysis result..."></app-loading-spinner>
+</ng-template>

@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using RhealAI.Domain.Enums;
 
 namespace RhealAI.Infrastructure.FileProcessing;
@@ -20,9 +21,14 @@ public static class FileAnalyzer
         "dist",
         "build",
         "out",
+        "output",
         "target",
         "bin",
         "obj",
+        ".angular",
+        ".next",
+        ".nuxt",
+        "www",
         
         // IDE/Editor folders
         ".vs",
@@ -76,6 +82,36 @@ public static class FileAnalyzer
         // OS
         ".DS_Store",
         "Thumbs.db"
+    };
+
+    // Patterns for files that should be ignored (build outputs, minified files, etc.)
+    private static readonly string[] IgnoredFilePatterns = new[]
+    {
+        // Angular/React/Vue build outputs
+        "main-*.js",
+        "chunk-*.js",
+        "polyfills-*.js",
+        "runtime-*.js",
+        "vendor-*.js",
+        "styles-*.css",
+        "*.min.js",
+        "*.min.css",
+        "*.bundle.js",
+        "*.bundle.css",
+        
+        // Source maps
+        "*.js.map",
+        "*.css.map",
+        "*.ts.map",
+        
+        // Lock files
+        "package-lock.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+        "composer.lock",
+        "Gemfile.lock",
+        "Pipfile.lock",
+        "poetry.lock"
     };
 
     private static readonly Dictionary<string, FileType> ExtensionMap = new(StringComparer.OrdinalIgnoreCase)
@@ -250,8 +286,34 @@ public static class FileAnalyzer
     /// </summary>
     public static bool ShouldIgnoreFile(string filePath)
     {
+        // Check if path contains any ignored folders
         var pathParts = filePath.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
-        return pathParts.Any(part => IgnoredFolders.Contains(part));
+        if (pathParts.Any(part => IgnoredFolders.Contains(part)))
+        {
+            return true;
+        }
+        
+        // Check if file name matches any ignored patterns
+        var fileName = Path.GetFileName(filePath);
+        foreach (var pattern in IgnoredFilePatterns)
+        {
+            if (MatchesPattern(fileName, pattern))
+            {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    private static bool MatchesPattern(string fileName, string pattern)
+    {
+        if (pattern.Contains('*'))
+        {
+            var regexPattern = "^" + Regex.Escape(pattern).Replace("\\*", ".*") + "$";
+            return Regex.IsMatch(fileName, regexPattern, RegexOptions.IgnoreCase);
+        }
+        return fileName.Equals(pattern, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

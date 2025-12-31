@@ -9,6 +9,8 @@ public interface IAIAnalysisService
 {
     Task<List<Violation>> AnalyzeCodeViolationsAsync(List<CodeFile> files, List<Standard> standards, string? connectionId = null);
     Task<List<Bug>> DetectBugsAsync(List<CodeFile> files, string? connectionId = null);
+    Task<List<Refactoring>> DetectRefactoringOpportunitiesAsync(List<CodeFile> files, string? connectionId = null);
+    Task<List<CodeDuplication>> DetectCodeDuplicationsAsync(List<CodeFile> files, string? connectionId = null);
     Task<ProjectSummary> AnalyzeProjectStructureAsync(
         List<CodeFile> files,
         Dictionary<string, int> folderStructure,

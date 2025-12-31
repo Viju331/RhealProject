@@ -94,15 +94,30 @@ public class ReportService : IReportService
 
         await SendProgress(connectionId, 90, $"Bug detection complete: Found {bugs.Count} potential bugs");
 
+        // Step 5.5: Detect refactoring opportunities
+        await SendProgress(connectionId, 91, $"Analyzing refactoring opportunities...");
+        var refactorings = await _aiAnalysisService.DetectRefactoringOpportunitiesAsync(codeFiles, connectionId);
+
+        await SendProgress(connectionId, 94, $"Refactoring analysis complete: Found {refactorings.Count} suggestions");
+
+        // Step 5.6: Detect code duplications
+        await SendProgress(connectionId, 95, $"Scanning project for code duplications...");
+        var duplications = await _aiAnalysisService.DetectCodeDuplicationsAsync(codeFiles, connectionId);
+
+        await SendProgress(connectionId, 97, $"Duplication detection complete: Found {duplications.Count} duplications");
+
         // Calculate statistics
         var filesWithViolations = violations.Select(v => v.FilePath).Distinct().Count();
         var filesWithBugs = bugs.Select(b => b.FilePath).Distinct().Count();
+        var filesNeedingRefactoring = refactorings.Select(r => r.FilePath).Distinct().Count();
+        var filesWithDuplications = duplications.SelectMany(d => d.Locations.Select(l => l.FilePath)).Distinct().Count();
+        var totalDuplicatedLines = duplications.Sum(d => d.LineCount * (d.Locations.Count - 1));
 
         stopwatch.Stop();
         var executionTime = FormatExecutionTime(stopwatch.Elapsed);
 
         // Step 6: Create report
-        await SendProgress(connectionId, 95, "Generating final report...");
+        await SendProgress(connectionId, 96, "Generating final report...");
         var report = new AnalysisReport
         {
             RepositoryId = repository.Id,
@@ -110,11 +125,18 @@ public class ReportService : IReportService
             TotalFiles = repository.Files.Count,
             FilesWithViolations = filesWithViolations,
             FilesWithBugs = filesWithBugs,
+            FilesNeedingRefactoring = filesNeedingRefactoring,
+            FilesWithDuplications = filesWithDuplications,
             TotalViolations = violations.Count,
             TotalBugs = bugs.Count,
+            TotalRefactorings = refactorings.Count,
+            TotalDuplications = duplications.Count,
+            TotalDuplicatedLines = totalDuplicatedLines,
             ExecutionTime = executionTime,
             Violations = violations,
             Bugs = bugs,
+            Refactorings = refactorings,
+            Duplications = duplications,
             Standards = standards,
             ViolationsBySeverity = violations
                 .GroupBy(v => v.Severity.ToString())
@@ -122,7 +144,13 @@ public class ReportService : IReportService
             BugsBySeverity = bugs
                 .GroupBy(b => b.Severity.ToString())
                 .ToDictionary(g => g.Key, g => g.Count()),
-            Summary = GenerateSummary(violations.Count, bugs.Count, standards.Count, repository.HasExistingStandards),
+            RefactoringsByPriority = refactorings
+                .GroupBy(r => r.Priority.ToString())
+                .ToDictionary(g => g.Key, g => g.Count()),
+            DuplicationsByImpact = duplications
+                .GroupBy(d => d.Impact.ToString())
+                .ToDictionary(g => g.Key, g => g.Count()),
+            Summary = GenerateSummary(violations.Count, bugs.Count, refactorings.Count, duplications.Count, standards.Count, repository.HasExistingStandards),
             ProjectSummary = projectSummary
         };
 
@@ -188,13 +216,14 @@ public class ReportService : IReportService
 
         var json = JsonSerializer.Serialize(report, new JsonSerializerOptions
         {
-            WriteIndented = true
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
 
         return await Task.FromResult(json);
     }
 
-    private string GenerateSummary(int violationsCount, int bugsCount, int standardsCount, bool hasExistingStandards)
+    private string GenerateSummary(int violationsCount, int bugsCount, int refactoringsCount, int duplicationsCount, int standardsCount, bool hasExistingStandards)
     {
         var standardsSource = hasExistingStandards
             ? "existing documentation"
@@ -204,6 +233,8 @@ public class ReportService : IReportService
 Found {standardsCount} coding standards from {standardsSource}.
 Detected {violationsCount} coding standard violations.
 Identified {bugsCount} potential bugs and issues.
+Discovered {refactoringsCount} refactoring opportunities.
+Found {duplicationsCount} code duplication instances.
 Review the detailed findings below for specific file locations, severity levels, and recommended fixes.";
     }
 }

@@ -21,15 +21,20 @@ For each bug found, provide:
 - Root Cause: Why this is a problem
 - Impact: Consequences if not fixed
 - Severity: Critical/High/Medium/Low
-- Line Number: Where the issue occurs
-- Code Snippet: The problematic code
+- Line Number: Start line where the issue occurs
+- End Line Number: End line of the issue (for multi-line bugs, or same as lineNumber for single-line bugs)
+- Code Snippet: The problematic code (single line for simple bugs, entire method for complex bugs)
 - Suggested Fix: How to resolve it
 - Reproduction Steps: Exact UI/API steps to reproduce (be very specific)
+
+IMPORTANT:
+- If the bug is on a single line, provide just that line in codeSnippet and set endLineNumber = lineNumber
+- If the bug affects a whole method or block, include the entire method in codeSnippet and set appropriate lineNumber and endLineNumber range
 
 Files to analyze:
 {0}
 
-Return a structured JSON array of bugs.
+Return a structured JSON array of bugs with fields: filePath, lineNumber, endLineNumber, title, description, rootCause, impact, severity, codeSnippet, suggestedFix, reproductionSteps
 ";
 
     public const string GenerateReproductionSteps = @"

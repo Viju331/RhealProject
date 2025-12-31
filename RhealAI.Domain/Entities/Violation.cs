@@ -11,6 +11,7 @@ public class Violation
     public string FileId { get; set; } = string.Empty;
     public string FilePath { get; set; } = string.Empty;
     public int LineNumber { get; set; }
+    public int EndLineNumber { get; set; }
     public string RuleName { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public ViolationType Type { get; set; }

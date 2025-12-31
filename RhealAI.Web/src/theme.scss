@@ -90,11 +90,25 @@
 
     /* Container & Layout */
     .container {
-        @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+        @apply w-full mx-auto px-4 sm:px-6 lg:px-8;
+    }
+
+    /* Full Width Container - No horizontal padding */
+    .container-full {
+        @apply w-full mx-0 px-0;
+    }
+
+    /* Fluid Container - Full width with padding */
+    .container-fluid {
+        @apply w-full mx-auto px-4 sm:px-6 lg:px-8;
     }
 
     .page-wrapper {
-        @apply min-h-screen py-4 sm:py-6 lg:py-8;
+        @apply min-h-screen py-4 sm:py-6 lg:py-8 w-full;
+    }
+
+    .page-wrapper-full {
+        @apply min-h-screen w-full p-0;
     }
 
     .page-header {
@@ -111,28 +125,49 @@
 
     /* Card Components */
     .card {
-        @apply bg-white rounded-xl sm:rounded-2xl shadow-card p-4 sm:p-6 transition-all duration-300;
+        @apply bg-white p-4 sm:p-6 transition-all duration-300;
+        border-radius: 16px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     }
 
     .card-hover {
-        @apply card hover:shadow-card-hover hover:-translate-y-1;
+        @apply card;
+    }
+
+    .card-hover:hover {
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.08);
+        transform: translateY(-4px);
     }
 
     .glass-card {
-        @apply bg-white bg-opacity-80 backdrop-blur-lg rounded-xl sm:rounded-2xl shadow-xl;
+        @apply bg-white bg-opacity-80 backdrop-blur-lg shadow-xl;
         @apply border border-white border-opacity-20 p-4 sm:p-6 lg:p-8;
+        border-radius: 16px;
     }
 
     .gradient-card {
-        @apply rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-purple-200;
+        @apply p-4 sm:p-6 border border-purple-200;
+        border-radius: 16px;
         background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
     }
 
     /* Button Components */
     .btn {
-        @apply px-4 py-2 sm:px-6 sm:py-3 font-semibold rounded-lg;
+        @apply px-6 py-3 sm:px-8 sm:py-4 font-semibold;
         @apply transition-all duration-300 inline-flex items-center justify-center;
         @apply focus:outline-none focus:ring-2 focus:ring-offset-2;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        min-height: 44px;
+    }
+
+    .btn:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+    }
+
+    .btn:active:not(:disabled) {
+        transform: translateY(0);
     }
 
     .btn-primary {
@@ -167,7 +202,8 @@
 
     /* Badge Components */
     .badge {
-        @apply inline-flex items-center px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium;
+        @apply inline-flex items-center px-2 py-1 sm:px-3 sm:py-1.5 text-xs sm:text-sm font-medium;
+        border-radius: 12px;
     }
 
     .badge-critical {
@@ -204,9 +240,10 @@
 
     /* Input Components */
     .input {
-        @apply w-full px-3 py-2 sm:px-4 sm:py-3 border border-gray-300 rounded-lg;
+        @apply w-full px-3 py-2 sm:px-4 sm:py-3 border border-gray-300;
         @apply focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent;
         @apply transition-all duration-300 text-sm sm:text-base;
+        border-radius: 12px;
     }
 
     .input-error {

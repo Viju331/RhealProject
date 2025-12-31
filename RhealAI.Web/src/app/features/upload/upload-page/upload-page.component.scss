@@ -1,28 +1,66 @@
 .upload-page {
-    @apply py-12;
+    @apply w-full min-h-screen;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .hero-section {
-    @apply text-center mb-12;
+    @apply text-center py-16 px-4 w-full;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+    animation: fadeIn 0.6s ease-out;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .hero-icon {
-    @apply inline-flex items-center justify-center w-24 h-24 mb-6 rounded-full;
+    @apply inline-flex items-center justify-center w-28 h-28 mb-6 rounded-full;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.4);
+    animation: floatIcon 3s ease-in-out infinite;
 
     mat-icon {
         @apply text-white;
-        font-size: 48px !important;
-        width: 48px !important;
-        height: 48px !important;
+        font-size: 56px !important;
+        width: 56px !important;
+        height: 56px !important;
+    }
+}
+
+@keyframes floatIcon {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-10px);
     }
 }
 
 .upload-card {
-    @apply p-8 mb-12;
-    max-width: 800px;
-    margin-left: auto;
-    margin-right: auto;
+    @apply p-10 my-12;
+    width: 100%;
+    max-width: 1000px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(102, 126, 234, 0.1);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
 }
 
 .progress-section {
@@ -56,6 +94,10 @@
     width: 24px !important;
     height: 24px !important;
     animation: bounce 1s ease-in-out infinite;
+
+    &.spinning {
+        animation: spin 1.5s linear infinite;
+    }
 }
 
 .activity-text {
@@ -111,25 +153,37 @@
 }
 
 .features-grid {
-    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6;
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-16;
+    width: 100%;
+    max-width: 1400px;
+    padding-left: 2rem;
+    padding-right: 2rem;
 }
 
 .feature-card {
-    @apply bg-white rounded-xl p-6 text-center shadow-card transition-all duration-300;
+    @apply bg-white rounded-xl p-8 text-center transition-all duration-300;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(102, 126, 234, 0.1);
+    min-height: 240px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 
     &:hover {
-        @apply -translate-y-1 shadow-card-hover;
+        transform: translateY(-8px);
+        box-shadow: 0 12px 40px rgba(102, 126, 234, 0.2);
+        border-color: rgba(102, 126, 234, 0.3);
     }
 }
 
 .feature-icon {
-    @apply w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center;
+    @apply w-20 h-20 rounded-full mx-auto mb-5 flex items-center justify-center;
 
     mat-icon {
         @apply text-white;
-        font-size: 32px !important;
-        width: 32px !important;
-        height: 32px !important;
+        font-size: 40px !important;
+        width: 40px !important;
+        height: 40px !important;
     }
 }
 
@@ -149,12 +203,20 @@
     @apply bg-gradient-to-br from-purple-500 to-purple-700;
 }
 
+.refactoring-icon {
+    @apply bg-gradient-to-br from-green-500 to-green-700;
+}
+
+.redundancy-icon {
+    @apply bg-gradient-to-br from-pink-500 to-pink-700;
+}
+
 .feature-card h3 {
-    @apply text-lg font-bold text-gray-800 mb-2;
+    @apply text-xl font-bold text-gray-800 mb-3;
 }
 
 .feature-card p {
-    @apply text-sm text-gray-600;
+    @apply text-base text-gray-600 leading-relaxed;
 }
 
 @keyframes pulse-slow {
@@ -190,5 +252,15 @@
 
     50% {
         transform: translateY(-3px);
+    }
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
     }
 }

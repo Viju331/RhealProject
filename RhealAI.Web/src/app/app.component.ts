@@ -25,9 +25,10 @@ export class AppComponent {
   title = 'Rheal AI Project Inspector';
 
   menuItems = [
-    { path: '/upload', icon: 'cloud_upload', label: 'Upload Repository' },
     { path: '/dashboard', icon: 'dashboard', label: 'Dashboard' },
+    { path: '/upload', icon: 'cloud_upload', label: 'Upload Repository' },
+    { path: '/analysis-results', icon: 'assessment', label: 'Analysis Results' },
     { path: '/standards', icon: 'rule', label: 'Standards' },
-    { path: '/reports', icon: 'assessment', label: 'Reports' }
+    { path: '/reports', icon: 'description', label: 'Reports' }
   ];
 }

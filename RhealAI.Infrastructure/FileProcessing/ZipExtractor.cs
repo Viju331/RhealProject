@@ -66,8 +66,8 @@ public class ZipExtractor
 
         foreach (var subDir in Directory.GetDirectories(directoryPath))
         {
-            var dirName = Path.GetFileName(subDir);
-            if (!FileAnalyzer.ShouldIgnoreFile(dirName))
+            var relativeDirPath = Path.GetRelativePath(basePath, subDir);
+            if (!FileAnalyzer.ShouldIgnoreFile(relativeDirPath))
             {
                 await ProcessDirectoryAsync(subDir, basePath, files);
             }

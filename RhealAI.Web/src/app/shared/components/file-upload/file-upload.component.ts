@@ -39,6 +39,7 @@ export class FileUploadComponent {
   isDragging = false;
   selectedFile: File | null = null;
   isLoading = false;
+  isSelectingFolder = false;
   selectedFiles: File[] = [];
   fileCount = 0;
 
@@ -87,8 +88,6 @@ export class FileUploadComponent {
     }
   }
 
-
-
   private handleFile(file: File): void {
     if (file.name.endsWith('.zip')) {
       this.selectedFile = file;
@@ -106,29 +105,36 @@ export class FileUploadComponent {
 
   selectLocalSource(): void {
     if (this.folderPath.trim()) {
-      // Check if the path ends with .zip
-      const path = this.folderPath.trim();
-      const isZip = path.toLowerCase().endsWith('.zip');
+      // Show loading state
+      this.isSelectingFolder = true;
 
-      this.localSourceSelected = true;
-      this.isZipFile = isZip;
-      this.selectedSourceName = path;
-      this.githubSelected = false;
-      this.selectedFile = null;
+      // Simulate validation delay
+      setTimeout(() => {
+        // Check if the path ends with .zip
+        const path = this.folderPath.trim();
+        const isZip = path.toLowerCase().endsWith('.zip');
 
-      if (isZip) {
-        // Treat as ZIP file path
-        this.sourceSelected.emit({
-          type: 'zip',
-          folderPath: path
-        });
-      } else {
-        // Treat as folder path
-        this.sourceSelected.emit({
-          type: 'folder',
-          folderPath: path
-        });
-      }
+        this.localSourceSelected = true;
+        this.isZipFile = isZip;
+        this.selectedSourceName = path;
+        this.githubSelected = false;
+        this.selectedFile = null;
+        this.isSelectingFolder = false;
+
+        if (isZip) {
+          // Treat as ZIP file path
+          this.sourceSelected.emit({
+            type: 'zip',
+            folderPath: path
+          });
+        } else {
+          // Treat as folder path
+          this.sourceSelected.emit({
+            type: 'folder',
+            folderPath: path
+          });
+        }
+      }, 500); // Small delay to show user feedback
     }
   }
 
@@ -158,6 +164,7 @@ export class FileUploadComponent {
     this.isZipFile = false;
     this.selectedSourceName = '';
     this.isLoading = false;
+    this.isSelectingFolder = false;
   }
 
   getFileSize(bytes: number): string {

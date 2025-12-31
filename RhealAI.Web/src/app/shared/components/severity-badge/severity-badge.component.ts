@@ -9,10 +9,30 @@ import { SeverityLevel } from '../../../models';
   styleUrl: './severity-badge.component.scss'
 })
 export class SeverityBadgeComponent {
-  @Input() severity!: SeverityLevel;
+  @Input() severity!: SeverityLevel | number | string;
   @Input() count?: number;
 
   getSeverityClass(): string {
-    return `severity-${this.severity.toLowerCase()}`;
+    const severityStr = this.getSeverityString();
+    return `severity-${severityStr.toLowerCase()}`;
+  }
+
+  getSeverityString(): string {
+    // Handle numeric severity values from API
+    if (typeof this.severity === 'number') {
+      switch (this.severity) {
+        case 1: return 'Low';
+        case 2: return 'Medium';
+        case 3: return 'High';
+        case 4: return 'Critical';
+        default: return 'Medium';
+      }
+    }
+    // Handle string severity values
+    return String(this.severity);
+  }
+
+  get displaySeverity(): string {
+    return this.getSeverityString();
   }
 }

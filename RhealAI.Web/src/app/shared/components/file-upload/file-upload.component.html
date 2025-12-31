@@ -11,12 +11,19 @@
                     <p class="loading-subtitle" *ngIf="fileCount === 0">Please wait while we process your selection</p>
                 </div>
 
-                <div class="local-source-area" *ngIf="!localSourceSelected && !isLoading">
+                <!-- Folder Selection Loading State -->
+                <div class="loading-state" *ngIf="isSelectingFolder">
+                    <mat-spinner diameter="60"></mat-spinner>
+                    <h3 class="loading-title">Validating folder path...</h3>
+                    <p class="loading-subtitle">{{ folderPath }}</p>
+                </div>
+
+                <div class="local-source-area" *ngIf="!localSourceSelected && !isLoading && !isSelectingFolder">
                     <mat-icon class="input-icon">source</mat-icon>
                     <h3 class="input-title">Select ZIP File or Project Folder</h3>
                     <p class="input-subtitle">Browse for a ZIP file or provide a folder path</p>
 
-                    <!-- Browse Buttons for ZIP Files -->
+                    <!-- Browse Button for ZIP Files -->
                     <div class="browse-section">
                         <input type="file" #zipInput (change)="onFileSelected($event)" accept=".zip" class="hidden"
                             id="zip-input" />
@@ -33,16 +40,18 @@
                     </div>
 
                     <!-- Folder Path Input -->
-                    <mat-form-field appearance="outline" class="full-width">
+                    <mat-form-field appearance="fill" class="full-width folder-input">
                         <mat-label>Project Folder Path</mat-label>
-                        <input matInput [(ngModel)]="folderPath" placeholder="D:\MyProject" />
+                        <mat-icon matPrefix>folder_open</mat-icon>
+                        <input matInput [(ngModel)]="folderPath" placeholder="C:\Projects\MyProject" />
                         <mat-hint>Enter the full path to your project folder</mat-hint>
                     </mat-form-field>
 
-                    <button mat-raised-button color="primary" [disabled]="!folderPath.trim()"
+                    <button mat-raised-button color="primary" [disabled]="!folderPath.trim() || isSelectingFolder"
                         (click)="selectLocalSource()" class="action-button">
-                        <mat-icon>check_circle</mat-icon>
-                        Select Folder
+                        <mat-spinner *ngIf="isSelectingFolder" diameter="20" class="button-spinner"></mat-spinner>
+                        <mat-icon *ngIf="!isSelectingFolder">check_circle</mat-icon>
+                        {{ isSelectingFolder ? 'Validating...' : 'Select Folder' }}
                     </button>
 
                     <p class="upload-note">
@@ -52,7 +61,7 @@
                 </div>
 
                 <!-- Local Source Selected Confirmation -->
-                <div class="source-selected" *ngIf="localSourceSelected && !isLoading">
+                <div class="source-selected" *ngIf="localSourceSelected && !isLoading && !isSelectingFolder">
                     <mat-icon class="source-icon success-icon">{{ isZipFile ? 'folder_zip' : 'folder' }}</mat-icon>
                     <div class="source-details">
                         <h4 class="source-title">{{ isZipFile ? 'ZIP File' : 'Folder' }} Selected</h4>
@@ -75,13 +84,15 @@
                     <h3 class="input-title">Clone from GitHub</h3>
                     <p class="input-subtitle">Provide the repository URL and optional branch</p>
 
-                    <mat-form-field appearance="outline" class="full-width">
+                    <mat-form-field appearance="fill" class="full-width github-input">
                         <mat-label>GitHub Repository URL</mat-label>
+                        <mat-icon matPrefix>link</mat-icon>
                         <input matInput [(ngModel)]="githubUrl" placeholder="https://github.com/username/repository" />
                     </mat-form-field>
 
-                    <mat-form-field appearance="outline" class="full-width">
+                    <mat-form-field appearance="fill" class="full-width github-branch-input">
                         <mat-label>Branch (Optional)</mat-label>
+                        <mat-icon matPrefix>account_tree</mat-icon>
                         <input matInput [(ngModel)]="githubBranch" placeholder="main" />
                     </mat-form-field>
 

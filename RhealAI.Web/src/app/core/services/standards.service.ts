@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { Standard } from '../../models';
 import { HttpOperationsService } from './http-operations.service';
 
@@ -9,7 +9,23 @@ import { HttpOperationsService } from './http-operations.service';
 export class StandardsService {
     constructor(private _http: HttpOperationsService) { }
 
-    getStandardsByRepository(repositoryId: string): Observable<Standard[]> {
-        return this._http.getAPI<Standard[]>(`standards/repository/${repositoryId}`);
+    getStandardsByRepository(repositoryId: string): Observable<any> {
+        return this._http.getAPI<any>(`standards/repository/${repositoryId}`).pipe(
+            map(response => {
+                // Handle the new grouped response structure
+                if (response.standardsByTechStack) {
+                    return {
+                        ...response,
+                        standards: response.standardsByTechStack.flatMap((group: any) => 
+                            group.standards.map((s: Standard) => ({
+                                ...s,
+                                techStack: group.techStack
+                            }))
+                        )
+                    };
+                }
+                return response;
+            })
+        );
     }
 }

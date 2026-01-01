@@ -43,6 +43,7 @@ builder.Services.AddSingleton<ZipExtractor>();
 builder.Services.AddSingleton<FolderAnalyzer>();
 builder.Services.AddSingleton<GitHubProcessor>();
 builder.Services.AddSingleton<AgentFactory>();
+builder.Services.AddScoped<StandardsGeneratorService>();
 builder.Services.AddScoped<IRepositoryService, RepositoryService>();
 builder.Services.AddScoped<IDocumentationService, DocumentationService>();
 builder.Services.AddScoped<IAIAnalysisService, AIAnalysisService>();

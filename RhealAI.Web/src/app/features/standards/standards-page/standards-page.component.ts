@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
@@ -13,6 +13,7 @@ import { Standard } from '../../../models';
   selector: 'app-standards-page',
   imports: [
     CommonModule,
+    RouterModule,
     MatButtonModule,
     MatIconModule,
     MatChipsModule,
@@ -24,8 +25,11 @@ import { Standard } from '../../../models';
 })
 export class StandardsPageComponent implements OnInit {
   standards: Standard[] = [];
+  standardsByTechStack: Map<string, Standard[]> = new Map();
+  techStacks: string[] = [];
   isLoading = true;
   repositoryId: string | null = null;
+  repositoryName: string = '';
 
   get categorizedStandards(): Map<string, Standard[]> {
     const map = new Map<string, Standard[]>();
@@ -41,6 +45,7 @@ export class StandardsPageComponent implements OnInit {
   get categories(): string[] {
     return Array.from(this.categorizedStandards.keys());
   }
+  
   get existingStandardsCount(): number {
     return this.standards.filter(s => s.isFromExistingDocs).length;
   }
@@ -48,6 +53,7 @@ export class StandardsPageComponent implements OnInit {
   get generatedStandardsCount(): number {
     return this.standards.filter(s => !s.isFromExistingDocs).length;
   }
+  
   constructor(
     private route: ActivatedRoute,
     private router: Router,
@@ -63,11 +69,37 @@ export class StandardsPageComponent implements OnInit {
     }
 
     try {
-      this.standards = await this.standardsService.getStandardsByRepository(this.repositoryId).toPromise() || [];
+      const response = await this.standardsService.getStandardsByRepository(this.repositoryId).toPromise();
+      if (response) {
+        this.repositoryName = response.repositoryName || '';
+        this.standards = response.standards || [];
+        this.techStacks = response.techStacks || [];
+        
+        // Group standards by tech stack
+        this.standardsByTechStack = new Map();
+        if (response.standardsByTechStack) {
+          response.standardsByTechStack.forEach((group: any) => {
+            this.standardsByTechStack.set(group.techStack, group.standards);
+          });
+        }
+      }
     } catch (error) {
       console.error('Error loading standards:', error);
     } finally {
       this.isLoading = false;
+    }
+  }
+  
+  getStandardsByTechStack(techStack: string): Standard[] {
+    return this.standardsByTechStack.get(techStack) || [];
+  }
+  
+  getPriorityClass(priority: string): string {
+    switch(priority?.toLowerCase()) {
+      case 'critical': return 'priority-critical';
+      case 'high': return 'priority-high';
+      case 'medium': return 'priority-medium';
+      default: return 'priority-low';
     }
   }
 }

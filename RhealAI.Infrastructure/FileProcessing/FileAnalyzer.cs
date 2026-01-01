@@ -111,7 +111,20 @@ public static class FileAnalyzer
         "composer.lock",
         "Gemfile.lock",
         "Pipfile.lock",
-        "poetry.lock"
+        "poetry.lock",
+        
+        // Configuration files to exclude from analysis
+        ".gitignore",
+        "*.sln",
+        "tailwind.config.*",
+        "package.json",
+        "tsconfig*.json",
+        "angular.json",
+        "jest.config.*",
+        "karma.conf.*",
+        ".editorconfig",
+        ".eslintrc*",
+        ".prettierrc*"
     };
 
     private static readonly Dictionary<string, FileType> ExtensionMap = new(StringComparer.OrdinalIgnoreCase)

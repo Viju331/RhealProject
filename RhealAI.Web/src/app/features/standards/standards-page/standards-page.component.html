@@ -1,87 +1,122 @@
-<div class="standards-page" *ngIf="!isLoading;">
-    <div class="container">
+<div class="standards-page">
+    <app-loading-spinner *ngIf="isLoading"></app-loading-spinner>
+
+    <div class="container" *ngIf="!isLoading">
         <!-- Page Header -->
         <div class="page-header-section">
             <div>
-                <h1 class="page-header">Coding Standards</h1>
-                <p class="page-subtitle">Extracted and generated standards for your project</p>
+                <h1 class="page-title">Coding Standards</h1>
+                <p class="page-subtitle">Project-specific standards based on actual code analysis</p>
             </div>
             <div class="header-actions">
-                <button mat-raised-button color="primary">
-                    <mat-icon>download</mat-icon>
-                    Export Standards
+                <button mat-raised-button color="primary" [routerLink]="['/dashboard', repositoryId]">
+                    <mat-icon>arrow_back</mat-icon>
+                    Back to Dashboard
                 </button>
             </div>
         </div>
 
-        <!-- Standards Overview -->
-        <div class="stats-grid mb-8">
-            <div class="stat-box">
-                <mat-icon class="stat-icon existing">description</mat-icon>
+        <!-- Statistics Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon-wrapper tech-api">
+                    <mat-icon>api</mat-icon>
+                </div>
                 <div class="stat-content">
-                    <div class="stat-value">{{ existingStandardsCount }}</div>
-                    <div class="stat-label">Existing Standards</div>
+                    <div class="stat-value">{{ getStandardsByTechStack('API').length }}</div>
+                    <div class="stat-label">API Standards</div>
                 </div>
             </div>
 
-            <div class="stat-box">
-                <mat-icon class="stat-icon generated">auto_awesome</mat-icon>
+            <div class="stat-card">
+                <div class="stat-icon-wrapper tech-ui">
+                    <mat-icon>web</mat-icon>
+                </div>
                 <div class="stat-content">
-                    <div class="stat-value">{{ generatedStandardsCount }}</div>
-
-                    <div class="stat-box">
-                        <mat-icon class="stat-icon category">category</mat-icon>
-                        <div class="stat-content">
-                            <div class="stat-value">{{ categories.length }}</div>
-                            <div class="stat-label">Categories</div>
-                        </div>
-                    </div>
+                    <div class="stat-value">{{ getStandardsByTechStack('UI').length }}</div>
+                    <div class="stat-label">UI Standards</div>
                 </div>
+            </div>
 
-                <!-- Standards by Category -->
-                <div class="standards-content">
-                    <div *ngFor="let category of categories" class="category-section">
-                        <h2 class="category-title">
-                            <mat-icon>folder</mat-icon>
-                            {{ category }}
-                        </h2>
-
-                        <mat-accordion class="standards-accordion">
-                            <mat-expansion-panel *ngFor="let standard of categorizedStandards.get(category)"
-                                class="standard-panel">
-                                <mat-expansion-panel-header>
-                                    <mat-panel-title class="standard-title">
-                                        <div class="title-content">
-                                            <span>{{ standard.name }}</span>
-                                            <mat-chip class="source-chip" [class.existing]="standard.isFromExistingDocs"
-                                                [class.generated]="!standard.isFromExistingDocs">
-                                                {{ standard.isFromExistingDocs ? 'Existing' : 'AI Generated' }}
-                                            </mat-chip>
-                                        </div>
-                                    </mat-panel-title>
-                                </mat-expansion-panel-header>
-
-                                <div class="standard-content">
-                                    <p class="standard-description">{{ standard.description }}</p>
-                                    <div *ngIf="standard.sourceFile" class="source-info">
-                                        <mat-icon>source</mat-icon>
-                                        <span>Source: {{ standard.sourceFile }}</span>
-                                    </div>
-                                </div>
-                            </mat-expansion-panel>
-                        </mat-accordion>
-                    </div>
+            <div class="stat-card">
+                <div class="stat-icon-wrapper tech-database">
+                    <mat-icon>storage</mat-icon>
                 </div>
+                <div class="stat-content">
+                    <div class="stat-value">{{ getStandardsByTechStack('Database').length }}</div>
+                    <div class="stat-label">Database Standards</div>
+                </div>
+            </div>
 
-                <!-- Empty State -->
-                <div *ngIf="standards.length === 0" class="empty-state">
-                    <mat-icon class="empty-icon">description</mat-icon>
-                    <h3>No Standards Found</h3>
-                    <p>No coding standards were extracted or generated for this repository.</p>
+            <div class="stat-card">
+                <div class="stat-icon-wrapper tech-general">
+                    <mat-icon>settings</mat-icon>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value">{{ getStandardsByTechStack('General').length }}</div>
+                    <div class="stat-label">General Standards</div>
                 </div>
             </div>
         </div>
 
-        <ng-template #loadingTemplate>
-            <app-loading-spinner message="Loading standards..."></app-loading-spinner>
-        </ng-template>
+        <!-- Tech Stack Sections -->
+        <div class="tech-stack-sections">
+            <div *ngFor="let techStack of techStacks" class="tech-stack-section">
+                <div class="tech-stack-header">
+                    <div class="tech-stack-title-wrapper">
+                        <mat-icon class="tech-stack-icon">
+                            {{ techStack === 'API' ? 'api' : techStack === 'UI' ? 'web' : techStack === 'Database' ? 'storage' : 'settings' }}
+                        </mat-icon>
+                        <h2 class="tech-stack-title">{{ techStack }} Standards</h2>
+                    </div>
+                    <span class="standards-count">{{ getStandardsByTechStack(techStack).length }} standards</span>
+                </div>
+
+                <div class="standards-grid">
+                    <div *ngFor="let standard of getStandardsByTechStack(techStack)" class="standard-card">
+                        <div class="standard-header">
+                            <div class="standard-title-row">
+                                <h3 class="standard-name">{{ standard.name }}</h3>
+                                <span class="priority-badge" [ngClass]="getPriorityClass(standard.priority)">
+                                    {{ standard.priority }}
+                                </span>
+                            </div>
+                            <span class="category-badge">{{ standard.category }}</span>
+                        </div>
+
+                        <p class="standard-description">{{ standard.description }}</p>
+
+                        <div class="standard-tags" *ngIf="standard.tags && standard.tags.length > 0">
+                            <mat-chip-set>
+                                <mat-chip *ngFor="let tag of standard.tags" class="standard-tag">
+                                    {{ tag }}
+                                </mat-chip>
+                            </mat-chip-set>
+                        </div>
+
+                        <div class="standard-examples" *ngIf="standard.examples && standard.examples.length > 0">
+                            <h4 class="examples-title">Examples:</h4>
+                            <ul class="examples-list">
+                                <li *ngFor="let example of standard.examples" class="example-item">
+                                    <code>{{ example }}</code>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="standard-footer" *ngIf="standard.isFromExistingDocs">
+                            <mat-icon class="source-icon">description</mat-icon>
+                            <span class="source-text">From: {{ standard.sourceFile }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div *ngIf="standards.length === 0" class="empty-state">
+            <mat-icon class="empty-icon">description</mat-icon>
+            <h3>No Standards Found</h3>
+            <p>No coding standards were generated for this repository.</p>
+        </div>
+    </div>
+</div>

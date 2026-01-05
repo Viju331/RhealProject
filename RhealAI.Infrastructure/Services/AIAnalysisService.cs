@@ -2535,7 +2535,7 @@ Provide a detailed analysis including:
         var combinedText = $"{suggestedFix} {description}".ToLowerInvariant();
 
         // SQL files - reject C#/JavaScript syntax
-        if (extension == ".sql")
+        if (extension == ".cs")
         {
             var forbiddenTerms = new[]
             {
@@ -2557,7 +2557,7 @@ Provide a detailed analysis including:
         }
 
         // C# files - reject SQL syntax
-        if (extension == ".cs")
+        if (extension == ".sql")
         {
             var forbiddenTerms = new[]
             {

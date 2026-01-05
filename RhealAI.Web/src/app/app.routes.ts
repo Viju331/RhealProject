@@ -4,6 +4,7 @@ import { AnalysisResultPageComponent } from './features/dashboard/analysis-resul
 import { DashboardPageComponent } from './features/dashboard/dashboard-page/dashboard-page.component';
 import { StandardsPageComponent } from './features/standards/standards-page/standards-page.component';
 import { ReportDetailComponent } from './features/reports/report-detail/report-detail.component';
+import { DocumentationComponent } from './components/documentation/documentation.component';
 
 export const routes: Routes = [
     { path: '', redirectTo: '/dashboard', pathMatch: 'full' },
@@ -14,5 +15,6 @@ export const routes: Routes = [
     { path: 'standards', component: StandardsPageComponent },
     { path: 'standards/:repositoryId', component: StandardsPageComponent },
     { path: 'reports/:id', component: ReportDetailComponent },
-    { path: '**', redirectTo: '/upload' }
+    { path: 'documentation', component: DocumentationComponent },
+    { path: '**', redirectTo: '/dashboard' },
 ];

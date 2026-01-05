@@ -1,0 +1,247 @@
+<div class="documentation-container">
+    <!-- Hero Section -->
+    <div class="doc-hero">
+        <div class="hero-content">
+            <mat-icon class="hero-icon">menu_book</mat-icon>
+            <h1 class="hero-title">Rheal AI Documentation</h1>
+            <p class="hero-subtitle">Comprehensive guide to AI-powered code analysis</p>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="doc-content">
+
+        <!-- Features Overview -->
+        <section class="doc-section">
+            <h2 class="section-title">
+                <mat-icon>star</mat-icon>
+                Key Features
+            </h2>
+            <div class="features-grid">
+                <mat-card *ngFor="let feature of features" class="feature-card">
+                    <mat-card-header>
+                        <mat-icon class="feature-icon">{{ feature.icon }}</mat-icon>
+                        <mat-card-title>{{ feature.title }}</mat-card-title>
+                    </mat-card-header>
+                    <mat-card-content>
+                        <p class="feature-description">{{ feature.description }}</p>
+                        <ul class="feature-list">
+                            <li *ngFor="let item of feature.features">
+                                <mat-icon class="check-icon">check_circle</mat-icon>
+                                {{ item }}
+                            </li>
+                        </ul>
+                    </mat-card-content>
+                </mat-card>
+            </div>
+        </section>
+
+        <!-- Analysis Steps -->
+        <section class="doc-section">
+            <h2 class="section-title">
+                <mat-icon>trending_up</mat-icon>
+                7-Step Analysis Pipeline
+            </h2>
+            <mat-accordion class="analysis-accordion">
+                <mat-expansion-panel *ngFor="let step of analysisSteps" class="step-panel">
+                    <mat-expansion-panel-header>
+                        <mat-panel-title class="step-title">
+                            <span class="step-number">Step {{ step.step }}</span>
+                            <span class="step-name">{{ step.name }}</span>
+                            <mat-chip class="progress-chip">{{ step.progress }}</mat-chip>
+                        </mat-panel-title>
+                    </mat-expansion-panel-header>
+                    <div class="step-content">
+                        <p class="step-description">{{ step.description }}</p>
+                        <ul class="detail-list">
+                            <li *ngFor="let detail of step.details">
+                                <mat-icon class="detail-icon">arrow_right</mat-icon>
+                                {{ detail }}
+                            </li>
+                        </ul>
+                    </div>
+                </mat-expansion-panel>
+            </mat-accordion>
+        </section>
+
+        <!-- AI Providers -->
+        <section class="doc-section">
+            <h2 class="section-title">
+                <mat-icon>smart_toy</mat-icon>
+                Supported AI Providers
+            </h2>
+            <div class="providers-grid">
+                <mat-card *ngFor="let provider of aiProviders" class="provider-card">
+                    <mat-card-header>
+                        <mat-card-title>{{ provider.name }}</mat-card-title>
+                        <mat-chip [class]="provider.status.includes('Free') ? 'free-chip' : 'paid-chip'">
+                            {{ provider.status }}
+                        </mat-chip>
+                    </mat-card-header>
+                    <mat-card-content>
+                        <p class="provider-description">{{ provider.description }}</p>
+                        <div class="models-section">
+                            <h4>Available Models:</h4>
+                            <div class="models-chips">
+                                <mat-chip *ngFor="let model of provider.models" class="model-chip">
+                                    {{ model }}
+                                </mat-chip>
+                            </div>
+                        </div>
+                    </mat-card-content>
+                </mat-card>
+            </div>
+        </section>
+
+        <!-- Getting Started -->
+        <section class="doc-section">
+            <h2 class="section-title">
+                <mat-icon>rocket_launch</mat-icon>
+                Getting Started
+            </h2>
+            <div class="getting-started-steps">
+                <mat-card *ngFor="let step of getStartedSteps" class="start-step-card">
+                    <div class="step-number-badge">{{ step.number }}</div>
+                    <mat-card-content>
+                        <h3 class="start-step-title">{{ step.title }}</h3>
+                        <p class="start-step-description">{{ step.description }}</p>
+                        <pre *ngIf="step.code" class="code-block"><code>{{ step.code }}</code></pre>
+                    </mat-card-content>
+                </mat-card>
+            </div>
+        </section>
+
+        <!-- Technical Stack -->
+        <section class="doc-section">
+            <h2 class="section-title">
+                <mat-icon>layers</mat-icon>
+                Technical Stack
+            </h2>
+            <div class="tech-stack-grid">
+                <mat-card *ngFor="let tech of technicalStack" class="tech-card">
+                    <mat-card-header>
+                        <mat-card-title>{{ tech.category }}</mat-card-title>
+                    </mat-card-header>
+                    <mat-card-content>
+                        <div class="tech-items">
+                            <mat-chip *ngFor="let item of tech.items" class="tech-chip">
+                                {{ item }}
+                            </mat-chip>
+                        </div>
+                    </mat-card-content>
+                </mat-card>
+            </div>
+        </section>
+
+        <!-- Best Practices -->
+        <section class="doc-section">
+            <h2 class="section-title">
+                <mat-icon>lightbulb</mat-icon>
+                Best Practices & Tips
+            </h2>
+            <mat-card class="tips-card">
+                <mat-card-content>
+                    <div class="tip-item">
+                        <mat-icon class="tip-icon">&#xE8B8;</mat-icon>
+                        <div class="tip-content">
+                            <h4>Choose the Right AI Provider</h4>
+                            <p>OpenAI (128K tokens) for large projects, GitHub Models (free) for small to medium
+                                projects</p>
+                        </div>
+                    </div>
+                    <div class="tip-item">
+                        <mat-icon class="tip-icon">&#xE8B8;</mat-icon>
+                        <div class="tip-content">
+                            <h4>Token Limits</h4>
+                            <p>GitHub Models: 8-16K tokens (free). OpenAI: 128K tokens (paid). Choose based on project
+                                size.</p>
+                        </div>
+                    </div>
+                    <div class="tip-item">
+                        <mat-icon class="tip-icon">&#xE8B8;</mat-icon>
+                        <div class="tip-content">
+                            <h4>Language-Specific Analysis</h4>
+                            <p>The system automatically applies language-specific rules. SQL files won't get C#
+                                suggestions and vice versa.</p>
+                        </div>
+                    </div>
+                    <div class="tip-item">
+                        <mat-icon class="tip-icon">&#xE8B8;</mat-icon>
+                        <div class="tip-content">
+                            <h4>Real-Time Progress</h4>
+                            <p>Watch the progress bar for detailed status through all 7 analysis steps with SignalR
+                                real-time updates.</p>
+                        </div>
+                    </div>
+                    <div class="tip-item">
+                        <mat-icon class="tip-icon">&#xE8B8;</mat-icon>
+                        <div class="tip-content">
+                            <h4>Clean Architecture</h4>
+                            <p>The system understands Clean Architecture patterns and detects violations like business
+                                logic in controllers.</p>
+                        </div>
+                    </div>
+                </mat-card-content>
+            </mat-card>
+        </section>
+
+        <!-- API Configuration -->
+        <section class="doc-section">
+            <h2 class="section-title">
+                <mat-icon>settings</mat-icon>
+                Configuration Examples
+            </h2>
+            <mat-card class="config-card">
+                <mat-card-header>
+                    <mat-card-title>OpenAI Configuration</mat-card-title>
+                </mat-card-header>
+                <mat-card-content>
+                    <pre class="code-block"><code>{{'{
+  "AI": {
+    "Provider": "OpenAI",
+    "OpenAI": {
+      "ApiKey": "sk-proj-your-api-key-here",
+      "Model": "gpt-4o"
+    }
+  }
+}'}}</code></pre>
+                </mat-card-content>
+            </mat-card>
+
+            <mat-card class="config-card">
+                <mat-card-header>
+                    <mat-card-title>GitHub Models Configuration</mat-card-title>
+                </mat-card-header>
+                <mat-card-content>
+                    <pre class="code-block"><code>{{'{
+  "AI": {
+    "Provider": "GitHub",
+    "GitHub": {
+      "Token": "ghp_your-github-token-here",
+      "Model": "gpt-4o-mini"
+    }
+  }
+}'}}</code></pre>
+                </mat-card-content>
+            </mat-card>
+
+            <mat-card class="config-card">
+                <mat-card-header>
+                    <mat-card-title>Google Gemini Configuration</mat-card-title>
+                </mat-card-header>
+                <mat-card-content>
+                    <pre class="code-block"><code>{{'{
+  "AI": {
+    "Provider": "Gemini",
+    "Gemini": {
+      "ApiKey": "your-gemini-api-key-here",
+      "Model": "gemini-pro"
+    }
+  }
+}'}}</code></pre>
+                </mat-card-content>
+            </mat-card>
+        </section>
+
+    </div>
+</div>

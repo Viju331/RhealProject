@@ -14,6 +14,7 @@ public class AgentFactory
     private const string DefaultModel = "gpt-4.1";
     private const string StandardsAnalysisModel = "o3-mini";
     private const string CodeAnalysisModel = "gpt-4.1";
+    private const string DefaultGeminiModel = "gemini-1.5-flash";
 
     public AgentFactory(IConfiguration configuration)
     {
@@ -31,6 +32,7 @@ public class AgentFactory
         {
             "openai" => CreateOpenAIClient(),
             "github" => CreateGitHubModelsClient(),
+            "gemini" => CreateGeminiClient(),
             "demo" => CreateDemoClient(),
             _ => CreateDemoClient()
         };
@@ -80,6 +82,17 @@ public class AgentFactory
         return openAIClient.GetChatClient(model);
     }
 
+    private ChatClient CreateGeminiClient()
+    {
+        var apiKey = _configuration["AI:Gemini:ApiKey"]
+            ?? throw new InvalidOperationException("Gemini API key not configured. Add it to appsettings.json under AI:Gemini:ApiKey");
+
+        var model = _configuration["AI:Gemini:Model"] ?? DefaultGeminiModel;
+
+        // Create Gemini client adapter that implements ChatClient interface
+        return new GeminiChatClientAdapter(apiKey, model);
+    }
+
     /// <summary>
     /// Creates a specialized client for standards extraction (uses o3-mini for better reasoning)
     /// </summary>
@@ -91,6 +104,7 @@ public class AgentFactory
         {
             "openai" => CreateOpenAIClientWithModel(StandardsAnalysisModel),
             "github" => CreateGitHubModelsClientWithModel(StandardsAnalysisModel),
+            "gemini" => CreateGeminiClient(), // Gemini 1.5 is excellent for standards
             "demo" => CreateDemoClient(),
             _ => CreateDemoClient()
         };

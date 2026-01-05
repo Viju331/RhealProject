@@ -11,7 +11,9 @@ namespace RhealAI.Infrastructure.AI;
 public class AgentFactory
 {
     private readonly IConfiguration _configuration;
-    private const string DefaultModel = "gpt-4o-mini";
+    private const string DefaultModel = "gpt-4.1";
+    private const string StandardsAnalysisModel = "o3-mini";
+    private const string CodeAnalysisModel = "gpt-4.1";
 
     public AgentFactory(IConfiguration configuration)
     {
@@ -43,16 +45,26 @@ public class AgentFactory
 
     private ChatClient CreateOpenAIClient()
     {
+        var model = _configuration["AI:OpenAI:Model"] ?? DefaultModel;
+        return CreateOpenAIClientWithModel(model);
+    }
+
+    private ChatClient CreateOpenAIClientWithModel(string model)
+    {
         var apiKey = _configuration["AI:OpenAI:ApiKey"]
             ?? throw new InvalidOperationException("OpenAI API key not configured. Add it to appsettings.json under AI:OpenAI:ApiKey");
 
         var openAIClient = new OpenAIClient(new ApiKeyCredential(apiKey));
-        var model = _configuration["AI:OpenAI:Model"] ?? DefaultModel;
-
         return openAIClient.GetChatClient(model);
     }
 
     private ChatClient CreateGitHubModelsClient()
+    {
+        var model = _configuration["AI:GitHub:Model"] ?? DefaultModel;
+        return CreateGitHubModelsClientWithModel(model);
+    }
+
+    private ChatClient CreateGitHubModelsClientWithModel(string model)
     {
         var githubToken = _configuration["AI:GitHub:Token"]
             ?? throw new InvalidOperationException("GitHub token not configured");
@@ -65,17 +77,23 @@ public class AgentFactory
             }
         );
 
-        var model = _configuration["AI:GitHub:Model"] ?? DefaultModel;
-
         return openAIClient.GetChatClient(model);
     }
 
     /// <summary>
-    /// Creates a specialized client for standards extraction
+    /// Creates a specialized client for standards extraction (uses o3-mini for better reasoning)
     /// </summary>
     public ChatClient CreateStandardsClient()
     {
-        return CreateChatClient();
+        var provider = _configuration["AI:Provider"] ?? "Demo";
+
+        return provider.ToLower() switch
+        {
+            "openai" => CreateOpenAIClientWithModel(StandardsAnalysisModel),
+            "github" => CreateGitHubModelsClientWithModel(StandardsAnalysisModel),
+            "demo" => CreateDemoClient(),
+            _ => CreateDemoClient()
+        };
     }
 
     /// <summary>

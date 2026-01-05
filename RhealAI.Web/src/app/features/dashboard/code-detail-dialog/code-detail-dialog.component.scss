@@ -1,9 +1,16 @@
 .dialog-container {
     @apply flex flex-col;
     max-width: 1400px;
+    height: 90vh;
     max-height: 90vh;
     overflow: hidden;
     border-radius: 16px;
+}
+
+// Scrollable Content Area
+.dialog-scrollable-content {
+    @apply flex-1 overflow-y-auto overflow-x-hidden;
+    min-height: 0; // Important for flexbox scrolling
 }
 
 // Dialog Header
@@ -119,8 +126,6 @@
 .code-comparison {
     @apply flex gap-4 px-6 py-6 bg-gray-50;
     min-height: 400px;
-    max-height: 500px;
-    overflow: hidden;
 }
 
 .code-column {
@@ -275,9 +280,13 @@
     }
 }
 
-// Dialog Actions
+// Dialog Actions (Sticky Footer)
 .dialog-actions {
     @apply flex items-center justify-end gap-3 px-6 py-4 border-t bg-gray-50;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
 
     button {
         @apply shadow-md;

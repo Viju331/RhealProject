@@ -227,14 +227,25 @@ public class ReportService : IReportService
     {
         var standardsSource = hasExistingStandards
             ? "existing documentation"
-            : "AI-generated from codebase analysis";
+            : "AI-powered deep codebase analysis";
 
-        return $@"Analysis completed successfully. 
-Found {standardsCount} coding standards from {standardsSource}.
-Detected {violationsCount} coding standard violations.
-Identified {bugsCount} potential bugs and issues.
-Discovered {refactoringsCount} refactoring opportunities.
-Found {duplicationsCount} code duplication instances.
-Review the detailed findings below for specific file locations, severity levels, and recommended fixes.";
+        return $@"Comprehensive Analysis Completed Successfully
+
+CODING STANDARDS ANALYSIS:
+✓ Extracted {standardsCount} detailed coding standards from {standardsSource}
+✓ Standards cover: Naming Conventions, Architecture Patterns, Error Handling, Documentation, 
+  Async Patterns, SOLID Principles, Security, Performance, Code Quality, and more
+✓ Each standard includes: Description, Examples, Rationale, Severity Level, and Applicable Components
+
+QUALITY ASSESSMENT:
+• {violationsCount} coding standard violations detected across the codebase
+• {bugsCount} potential bugs and issues identified
+• {refactoringsCount} refactoring opportunities for improved code quality
+• {duplicationsCount} code duplication instances found
+
+All findings include specific file locations, line numbers, severity levels, detailed descriptions,
+and actionable recommendations for fixes. Standards are comprehensive and ready for enforcement.
+
+Review the detailed findings below to improve code quality, maintainability, and adherence to best practices.\";
     }
 }

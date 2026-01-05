@@ -50,32 +50,51 @@
             </div>
 
             <div class="analysis-steps">
-                <div class="step" [class.completed]="uploadProgress >= 15">
-                    <mat-icon class="step-icon">{{ uploadProgress >= 15 ? 'check_circle' : 'radio_button_unchecked'
+                <!-- Step 1: Analyzing structure (5-22%) -->
+                <div class="step" [class.completed]="uploadProgress >= 22">
+                    <mat-icon class="step-icon">{{ uploadProgress >= 22 ? 'check_circle' : 'radio_button_unchecked'
                         }}</mat-icon>
                     <span>Analyzing structure</span>
                 </div>
+                <!-- Step 2: Extracting standards (25-40%) -->
                 <div class="step" [class.completed]="uploadProgress >= 40"
-                    [class.active]="uploadProgress >= 15 && uploadProgress < 40">
-                    <mat-icon class="step-icon">{{ uploadProgress >= 40 ? 'check_circle' : (uploadProgress >= 15 ?
+                    [class.active]="uploadProgress >= 22 && uploadProgress < 40">
+                    <mat-icon class="step-icon">{{ uploadProgress >= 40 ? 'check_circle' : (uploadProgress >= 22 ?
                         'radio_button_checked' : 'radio_button_unchecked') }}</mat-icon>
                     <span>Extracting standards</span>
                 </div>
+                <!-- Step 3: Detecting violations (42-70%) -->
                 <div class="step" [class.completed]="uploadProgress >= 70"
                     [class.active]="uploadProgress >= 40 && uploadProgress < 70">
                     <mat-icon class="step-icon">{{ uploadProgress >= 70 ? 'check_circle' : (uploadProgress >= 40 ?
                         'radio_button_checked' : 'radio_button_unchecked') }}</mat-icon>
                     <span>Detecting violations</span>
                 </div>
+                <!-- Step 4: Finding bugs (72-90%) -->
                 <div class="step" [class.completed]="uploadProgress >= 90"
                     [class.active]="uploadProgress >= 70 && uploadProgress < 90">
                     <mat-icon class="step-icon">{{ uploadProgress >= 90 ? 'check_circle' : (uploadProgress >= 70 ?
                         'radio_button_checked' : 'radio_button_unchecked') }}</mat-icon>
                     <span>Finding bugs</span>
                 </div>
+                <!-- Step 5: Analyzing refactorings (91-94%) -->
+                <div class="step" [class.completed]="uploadProgress >= 94"
+                    [class.active]="uploadProgress >= 90 && uploadProgress < 94">
+                    <mat-icon class="step-icon">{{ uploadProgress >= 94 ? 'check_circle' : (uploadProgress >= 90 ?
+                        'radio_button_checked' : 'radio_button_unchecked') }}</mat-icon>
+                    <span>Analyzing refactorings</span>
+                </div>
+                <!-- Step 6: Detecting duplications (95-97%) -->
+                <div class="step" [class.completed]="uploadProgress >= 97"
+                    [class.active]="uploadProgress >= 94 && uploadProgress < 97">
+                    <mat-icon class="step-icon">{{ uploadProgress >= 97 ? 'check_circle' : (uploadProgress >= 94 ?
+                        'radio_button_checked' : 'radio_button_unchecked') }}</mat-icon>
+                    <span>Detecting duplications</span>
+                </div>
+                <!-- Step 7: Generating report (96-100%) -->
                 <div class="step" [class.completed]="uploadProgress >= 100"
-                    [class.active]="uploadProgress >= 90 && uploadProgress < 100">
-                    <mat-icon class="step-icon">{{ uploadProgress >= 100 ? 'check_circle' : (uploadProgress >= 90 ?
+                    [class.active]="uploadProgress >= 97 && uploadProgress < 100">
+                    <mat-icon class="step-icon">{{ uploadProgress >= 100 ? 'check_circle' : (uploadProgress >= 97 ?
                         'radio_button_checked' : 'radio_button_unchecked') }}</mat-icon>
                     <span>Generating report</span>
                 </div>

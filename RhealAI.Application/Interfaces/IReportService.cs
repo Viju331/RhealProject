@@ -10,4 +10,6 @@ public interface IReportService
     Task<AnalysisReport> GenerateReportAsync(string repositoryId, string? connectionId = null);
     Task<byte[]> ExportReportToPdfAsync(string reportId);
     Task<string> ExportReportToJsonAsync(string reportId);
+    Task<string> GenerateHtmlReportAsync(string reportId);
+    Task<byte[]> ExportReportToHtmlAsync(string reportId);
 }

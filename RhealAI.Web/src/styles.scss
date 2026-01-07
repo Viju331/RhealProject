@@ -364,6 +364,33 @@ $my-theme: mat.m2-define-light-theme((color: (primary: $my-primary,
   }
 }
 
+// Custom Snackbar Styles
+.error-snackbar {
+  background-color: #f44336 !important;
+  color: white !important;
+
+  .mat-mdc-snack-bar-label {
+    color: white !important;
+  }
+
+  .mat-mdc-button {
+    color: white !important;
+  }
+}
+
+.success-snackbar {
+  background-color: #4caf50 !important;
+  color: white !important;
+
+  .mat-mdc-snack-bar-label {
+    color: white !important;
+  }
+
+  .mat-mdc-button {
+    color: white !important;
+  }
+}
+
 // Mobile-first responsive utilities
 @media (max-width: 640px) {
   .card {

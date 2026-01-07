@@ -6,6 +6,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { FormsModule } from '@angular/forms';
 
 export interface UploadSource {
@@ -27,6 +28,7 @@ export interface UploadSource {
     MatInputModule,
     MatFormFieldModule,
     MatProgressSpinnerModule,
+    MatSnackBarModule,
     FormsModule
   ],
   templateUrl: './file-upload.component.html',
@@ -35,6 +37,8 @@ export interface UploadSource {
 export class FileUploadComponent {
   @Output() fileSelected = new EventEmitter<File>();
   @Output() sourceSelected = new EventEmitter<UploadSource>();
+
+  constructor(private snackBar: MatSnackBar) { }
 
   isDragging = false;
   selectedFile: File | null = null;
@@ -80,9 +84,30 @@ export class FileUploadComponent {
   onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
+      const file = input.files[0];
+
+      // Validate file extension and MIME type
+      const fileName = file.name.toLowerCase();
+      const validExtensions = ['.zip'];
+      const validMimeTypes = ['application/zip', 'application/x-zip-compressed', 'application/x-compressed'];
+
+      const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
+      const hasValidMimeType = validMimeTypes.includes(file.type) || file.type === '';
+
+      if (!hasValidExtension) {
+        this.snackBar.open('Invalid file type. Please select a ZIP file only.', 'Close', {
+          duration: 5000,
+          panelClass: ['error-snackbar'],
+          horizontalPosition: 'center',
+          verticalPosition: 'top'
+        });
+        input.value = ''; // Reset the input
+        return;
+      }
+
       this.isLoading = true;
       setTimeout(() => {
-        this.handleFile(input.files![0]);
+        this.handleFile(file);
         this.isLoading = false;
       }, 300);
     }
@@ -99,7 +124,12 @@ export class FileUploadComponent {
       this.fileSelected.emit(file);
       this.sourceSelected.emit({ type: 'zip', file });
     } else {
-      alert('Please select a ZIP file');
+      this.snackBar.open('Please select a ZIP file', 'Close', {
+        duration: 5000,
+        panelClass: ['error-snackbar'],
+        horizontalPosition: 'center',
+        verticalPosition: 'top'
+      });
     }
   }
 

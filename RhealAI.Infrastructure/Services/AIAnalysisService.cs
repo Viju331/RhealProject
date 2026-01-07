@@ -18,7 +18,7 @@ public class AIAnalysisService : IAIAnalysisService
     private readonly AgentFactory _agentFactory;
     private readonly IConfiguration _configuration;
     private readonly IProgressHub? _progressHub;
-    
+
     // Store project context across all analysis steps
     private ProjectContext? _projectContext;
 
@@ -503,186 +503,310 @@ BEFORE suggesting, verify syntax matches the Language field!"),
     private List<Refactoring> GenerateMockRefactorings(List<CodeFile> files)
     {
         var refactorings = new List<Refactoring>();
-        var random = new Random(42); // Consistent seed for repeatable results
 
-        foreach (var file in files)
+        // Filter out SQL files - only process UI and API files
+        var filteredFiles = files.Where(f =>
+            !f.FilePath.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) &&
+            f.FileType != FileType.SQL &&
+            f.Content.Length > 100
+        ).ToList();
+
+        foreach (var file in filteredFiles)
         {
-            var lines = file.Content.Split('\n');
+            var lines = file.Content.Split(new[] { '\r', '\n' }, StringSplitOptions.None);
             var linesArray = lines.ToArray();
 
-            // Check for long methods
-            var methodPattern = new[] { "function ", "func ", "def ", "public ", "private ", "protected ", "void ", "async " };
+            // 1. Check for long methods - GENUINE ANALYSIS
+            var methodPattern = new[] { "function ", "func ", "def ", "public ", "private ", "protected ", "void ", "async ", "Task<", "Task " };
             for (int i = 0; i < lines.Length; i++)
             {
                 var line = lines[i];
-                if (methodPattern.Any(p => line.Contains(p, StringComparison.OrdinalIgnoreCase)))
+                if (methodPattern.Any(p => line.Contains(p, StringComparison.OrdinalIgnoreCase)) &&
+                    line.Contains("(") && !line.TrimStart().StartsWith("//"))
                 {
-                    // Count lines until method end (simple heuristic)
+                    // Count actual lines until method end
                     int methodLength = 0;
                     int openBraces = 0;
                     bool inMethod = false;
+                    int methodStartLine = i;
 
-                    for (int j = i; j < Math.Min(i + 100, lines.Length); j++)
+                    for (int j = i; j < Math.Min(i + 200, lines.Length); j++)
                     {
-                        if (lines[j].Contains("{")) { openBraces++; inMethod = true; }
-                        if (lines[j].Contains("}")) openBraces--;
+                        var currentLine = lines[j];
+                        if (currentLine.Contains("{")) { openBraces++; inMethod = true; }
+                        if (currentLine.Contains("}")) openBraces--;
                         if (inMethod) methodLength++;
                         if (inMethod && openBraces == 0) break;
                     }
 
                     if (methodLength > 50)
                     {
-                        var (snippet, startLine, endLine) = GetCodeSnippetWithRange(linesArray, i + 1);
+                        var methodName = ExtractMethodNameFromLine(line);
+                        var snippet = GetMethodSnippet(lines, methodStartLine, methodLength);
+                        var endLine = methodStartLine + methodLength;
+
                         refactorings.Add(new Refactoring
                         {
                             Id = Guid.NewGuid().ToString(),
                             FilePath = file.FilePath,
-                            LineNumber = startLine,
-                            EndLineNumber = endLine,
+                            LineNumber = methodStartLine + 1,
+                            EndLineNumber = Math.Min(endLine + 1, lines.Length),
                             RefactoringType = "Extract Method",
-                            Title = "Long Method Detected",
-                            Description = $"This method has approximately {methodLength} lines and should be broken down into smaller, more focused methods.",
+                            Title = $"Long Method: {methodName}",
+                            Description = $"Method '{methodName}' has {methodLength} lines. Consider breaking it into smaller, focused methods.",
                             CurrentCode = snippet,
-                            SuggestedCode = "// Extract logical blocks into separate methods\n// Example: ExtractValidationLogic(), ExtractBusinessLogic(), ExtractDataAccess()",
-                            Reason = "Long methods are difficult to understand, test, and maintain. They often violate the Single Responsibility Principle.",
-                            Benefits = "Improved readability, easier testing, better maintainability, and clearer code organization.",
-                            Priority = methodLength > 100 ? SeverityLevel.Critical : SeverityLevel.High,
-                            ImprovementAreas = new List<string> { "Readability", "Maintainability", "Testability" }
+                            SuggestedCode = $"// Break down '{methodName}' into logical steps:\n// 1. Extract validation logic\n// 2. Extract business logic\n// 3. Extract data access/transformation",
+                            Reason = "Long methods violate Single Responsibility Principle and are hard to test and maintain.",
+                            Benefits = "Improved readability, easier testing, better maintainability, clearer separation of concerns.",
+                            Priority = methodLength > 100 ? SeverityLevel.Critical : methodLength > 70 ? SeverityLevel.High : SeverityLevel.Medium,
+                            ImprovementAreas = new List<string> { "Readability", "Maintainability", "Testability", "Single Responsibility" }
                         });
+
+                        // Skip ahead to avoid duplicate detections
+                        i = endLine;
                     }
                 }
             }
 
-            // Check for complex conditions (nested if statements)
-            int nestingLevel = 0;
+            // 2. Check for deeply nested conditionals - GENUINE ANALYSIS
+            int currentNesting = 0;
+            int maxNestingLine = -1;
+            int maxNesting = 0;
+
             for (int i = 0; i < lines.Length; i++)
             {
                 var line = lines[i].Trim();
-                if (line.StartsWith("if ") || line.StartsWith("if("))
+
+                // Track nesting level
+                if (line.StartsWith("if ") || line.StartsWith("if(") ||
+                    line.StartsWith("for ") || line.StartsWith("for(") ||
+                    line.StartsWith("while ") || line.StartsWith("while(") ||
+                    line.StartsWith("switch ") || line.StartsWith("switch("))
                 {
-                    nestingLevel++;
-                    if (nestingLevel > 3)
+                    currentNesting++;
+                    if (currentNesting > maxNesting)
                     {
-                        var (snippet, startLine, endLine) = GetCodeSnippetWithRange(linesArray, i + 1);
-                        refactorings.Add(new Refactoring
-                        {
-                            Id = Guid.NewGuid().ToString(),
-                            FilePath = file.FilePath,
-                            LineNumber = startLine,
-                            EndLineNumber = endLine,
-                            RefactoringType = "Simplify Conditional",
-                            Title = "Deep Nesting Detected",
-                            Description = $"This code has {nestingLevel} levels of nested conditions, making it hard to follow.",
-                            CurrentCode = snippet,
-                            SuggestedCode = "// Use guard clauses or early returns\n// Example: if (!condition) return;\n// Or extract into separate validation methods",
-                            Reason = "Deeply nested conditions create cognitive load and increase the risk of logic errors.",
-                            Benefits = "Flatter code structure, easier to understand control flow, reduced complexity.",
-                            Priority = SeverityLevel.High,
-                            ImprovementAreas = new List<string> { "Readability", "Maintainability" }
-                        });
+                        maxNesting = currentNesting;
+                        maxNestingLine = i;
                     }
                 }
-                if (line.Contains("}")) nestingLevel = Math.Max(0, nestingLevel - 1);
+
+                if (line.Contains("{")) currentNesting++;
+                if (line.Contains("}")) currentNesting = Math.Max(0, currentNesting - 1);
             }
 
-            // Check for magic numbers
-            for (int i = 0; i < lines.Length; i++)
+            if (maxNesting > 3 && maxNestingLine >= 0)
             {
-                var line = lines[i];
-                // Look for hardcoded numbers (excluding 0, 1, -1, 100)
-                var numbersPattern = System.Text.RegularExpressions.Regex.Matches(line, @"\b(\d{2,})\b");
-                foreach (System.Text.RegularExpressions.Match match in numbersPattern)
-                {
-                    var number = match.Value;
-                    if (number != "100" && number != "10" && !line.Contains("//") && !line.Contains("private") && !line.Contains("const"))
-                    {
-                        var (snippet, startLine, endLine) = GetCodeSnippetWithRange(linesArray, i + 1);
-                        refactorings.Add(new Refactoring
-                        {
-                            Id = Guid.NewGuid().ToString(),
-                            FilePath = file.FilePath,
-                            LineNumber = startLine,
-                            EndLineNumber = endLine,
-                            RefactoringType = "Replace Magic Number",
-                            Title = $"Magic Number: {number}",
-                            Description = $"The hardcoded number '{number}' should be replaced with a named constant.",
-                            CurrentCode = snippet,
-                            SuggestedCode = $"private const int MAX_ITEMS = {number}; // Use descriptive name",
-                            Reason = "Magic numbers reduce code readability and make it harder to maintain. Named constants provide context and make changes easier.",
-                            Benefits = "Better code documentation, easier to update values, clearer intent.",
-                            Priority = SeverityLevel.Medium,
-                            ImprovementAreas = new List<string> { "Readability", "Maintainability" }
-                        });
-                        break; // Only one refactoring per line
-                    }
-                }
-            }
-
-            // Check for duplicate code patterns (simple string matching)
-            var codeBlocks = new Dictionary<string, List<int>>();
-            for (int i = 0; i < lines.Length - 3; i++)
-            {
-                var block = string.Join("\n", lines.Skip(i).Take(3)).Trim();
-                if (block.Length > 50 && !block.Contains("//") && !block.StartsWith("using"))
-                {
-                    if (!codeBlocks.ContainsKey(block))
-                        codeBlocks[block] = new List<int>();
-                    codeBlocks[block].Add(i + 1);
-                }
-            }
-
-            foreach (var duplicate in codeBlocks.Where(kvp => kvp.Value.Count > 1))
-            {
-                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(linesArray, duplicate.Value.First());
+                var snippet = GetContextSnippet(lines, maxNestingLine, 7);
                 refactorings.Add(new Refactoring
                 {
                     Id = Guid.NewGuid().ToString(),
                     FilePath = file.FilePath,
-                    LineNumber = startLine,
-                    EndLineNumber = endLine,
-                    RefactoringType = "Extract Method",
-                    Title = "Duplicate Code Detected",
-                    Description = $"This code block appears {duplicate.Value.Count} times in the file at lines: {string.Join(", ", duplicate.Value)}.",
+                    LineNumber = Math.Max(1, maxNestingLine - 2),
+                    EndLineNumber = Math.Min(lines.Length, maxNestingLine + 5),
+                    RefactoringType = "Simplify Conditional",
+                    Title = $"Deep Nesting: {maxNesting} Levels",
+                    Description = $"Code has {maxNesting} levels of nesting at line {maxNestingLine + 1}, making it difficult to follow.",
                     CurrentCode = snippet,
-                    SuggestedCode = "// Extract into a reusable method\nprivate void ExtractedMethod() {\n    // Common logic here\n}",
-                    Reason = "Duplicate code increases maintenance burden. Changes must be made in multiple places, increasing the risk of bugs.",
-                    Benefits = "Single source of truth, easier maintenance, reduced code size.",
-                    Priority = duplicate.Value.Count > 2 ? SeverityLevel.High : SeverityLevel.Medium,
-                    ImprovementAreas = new List<string> { "Maintainability", "DRY Principle" }
+                    SuggestedCode = "// Refactor options:\n// 1. Use guard clauses: if (!condition) return;\n// 2. Extract nested logic to separate methods\n// 3. Use early returns to reduce nesting",
+                    Reason = "Deep nesting increases cyclomatic complexity and cognitive load, making code error-prone.",
+                    Benefits = "Flatter code structure, reduced complexity, easier to understand and debug.",
+                    Priority = maxNesting > 5 ? SeverityLevel.High : SeverityLevel.Medium,
+                    ImprovementAreas = new List<string> { "Readability", "Complexity", "Maintainability" }
                 });
-                break; // Only report first duplicate
             }
 
-            // Check for long parameter lists
+            // 3. Check for magic numbers - GENUINE ANALYSIS
+            var magicNumberPattern = new System.Text.RegularExpressions.Regex(@"\b(\d{2,})\b");
+            var reportedLines = new HashSet<int>();
+
             for (int i = 0; i < lines.Length; i++)
             {
                 var line = lines[i];
-                var paramCount = line.Count(c => c == ',');
-                if ((line.Contains("function ") || line.Contains("public ") || line.Contains("private ")) &&
-                    line.Contains("(") && paramCount > 4)
+
+                // Skip comments, constants, and already reported lines
+                if (line.TrimStart().StartsWith("//") ||
+                    line.Contains("const ") ||
+                    line.Contains("readonly ") ||
+                    reportedLines.Contains(i))
+                    continue;
+
+                var matches = magicNumberPattern.Matches(line);
+                foreach (System.Text.RegularExpressions.Match match in matches)
                 {
-                    var (snippet, startLine, endLine) = GetCodeSnippetWithRange(linesArray, i + 1);
+                    var number = match.Value;
+
+                    // Skip common numbers
+                    if (number == "10" || number == "100" || number == "1000" ||
+                        number == "24" || number == "60" || number == "12")
+                        continue;
+
+                    var snippet = GetContextSnippet(lines, i, 3);
+                    var constantName = GenerateConstantName(line, number);
+
                     refactorings.Add(new Refactoring
                     {
                         Id = Guid.NewGuid().ToString(),
                         FilePath = file.FilePath,
-                        LineNumber = startLine,
-                        EndLineNumber = endLine,
-                        RefactoringType = "Introduce Parameter Object",
-                        Title = "Long Parameter List",
-                        Description = $"This method has {paramCount + 1} parameters, making it hard to use and understand.",
+                        LineNumber = Math.Max(1, i),
+                        EndLineNumber = Math.Min(lines.Length, i + 2),
+                        RefactoringType = "Replace Magic Number",
+                        Title = $"Magic Number: {number}",
+                        Description = $"Hardcoded value '{number}' should be replaced with a named constant for clarity.",
                         CurrentCode = snippet,
-                        SuggestedCode = "// Create a parameter object class\nclass MethodParameters {\n    // Group related parameters\n}",
-                        Reason = "Long parameter lists are hard to remember and often indicate that the method is doing too much.",
-                        Benefits = "Clearer method signature, easier to add new parameters, better encapsulation.",
+                        SuggestedCode = $"private const int {constantName} = {number};\n// Then use: {constantName}",
+                        Reason = "Magic numbers lack context and make code harder to understand and maintain.",
+                        Benefits = "Self-documenting code, easier to update values, clearer intent.",
                         Priority = SeverityLevel.Medium,
-                        ImprovementAreas = new List<string> { "Readability", "Maintainability", "API Design" }
+                        ImprovementAreas = new List<string> { "Readability", "Maintainability", "Code Quality" }
                     });
+
+                    reportedLines.Add(i);
+                    break; // Only one refactoring per line
+                }
+            }
+
+            // 4. Check for duplicate code within file - GENUINE ANALYSIS
+            var codeBlockMap = new Dictionary<string, List<int>>();
+            const int blockSize = 4;
+
+            for (int i = 0; i <= lines.Length - blockSize; i++)
+            {
+                var block = string.Join("\n", lines.Skip(i).Take(blockSize));
+                var normalized = NormalizeCode(block);
+
+                // Skip if too small or mostly whitespace
+                if (normalized.Length < 60 || string.IsNullOrWhiteSpace(normalized))
+                    continue;
+
+                if (!codeBlockMap.ContainsKey(normalized))
+                    codeBlockMap[normalized] = new List<int>();
+
+                codeBlockMap[normalized].Add(i);
+            }
+
+            var duplicates = codeBlockMap.Where(kvp => kvp.Value.Count > 1).ToList();
+            foreach (var duplicate in duplicates.Take(3)) // Limit to top 3 per file
+            {
+                var locations = duplicate.Value;
+                var firstLocation = locations.First();
+                var snippet = GetContextSnippet(lines, firstLocation, blockSize + 2);
+
+                refactorings.Add(new Refactoring
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    FilePath = file.FilePath,
+                    LineNumber = firstLocation + 1,
+                    EndLineNumber = firstLocation + blockSize + 1,
+                    RefactoringType = "Extract Method",
+                    Title = $"Duplicate Code: {locations.Count} Occurrences",
+                    Description = $"This {blockSize}-line code block appears {locations.Count} times at lines: {string.Join(", ", locations.Select(l => l + 1))}",
+                    CurrentCode = snippet,
+                    SuggestedCode = $"// Extract to reusable method:\nprivate void ExtractedMethod() {{\n    // Move common logic here\n}}",
+                    Reason = "Code duplication violates DRY principle. Changes must be made in multiple places, increasing bug risk.",
+                    Benefits = "Single source of truth, easier maintenance, reduced code size, consistent behavior.",
+                    Priority = locations.Count > 3 ? SeverityLevel.High : SeverityLevel.Medium,
+                    ImprovementAreas = new List<string> { "Maintainability", "DRY Principle", "Code Duplication" }
+                });
+            }
+
+            // 5. Check for long parameter lists - GENUINE ANALYSIS
+            var methodSignaturePattern = new System.Text.RegularExpressions.Regex(@"(public|private|protected|internal)?\s*(static)?\s*(async)?\s*\w+\s+\w+\s*\([^)]+\)");
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                var match = methodSignaturePattern.Match(line);
+
+                if (match.Success)
+                {
+                    var paramCount = line.Count(c => c == ',') + 1;
+                    var openParen = line.IndexOf('(');
+                    var closeParen = line.IndexOf(')');
+
+                    // Verify it's actually a method with parameters
+                    if (openParen > 0 && closeParen > openParen && paramCount > 4)
+                    {
+                        var methodName = ExtractMethodNameFromLine(line);
+                        var snippet = GetContextSnippet(lines, i, 3);
+
+                        refactorings.Add(new Refactoring
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            FilePath = file.FilePath,
+                            LineNumber = i + 1,
+                            EndLineNumber = i + 2,
+                            RefactoringType = "Introduce Parameter Object",
+                            Title = $"Long Parameter List: {methodName}",
+                            Description = $"Method '{methodName}' has {paramCount} parameters. Consider using a parameter object.",
+                            CurrentCode = snippet,
+                            SuggestedCode = $"// Create parameter object:\npublic class {methodName}Parameters {{\n    // Group related parameters\n}}\n\n// Update method signature:\npublic void {methodName}({methodName}Parameters params)",
+                            Reason = "Long parameter lists are hard to use and often indicate the method has too many responsibilities.",
+                            Benefits = "Clearer API, easier to extend, better encapsulation, reduced coupling.",
+                            Priority = paramCount > 6 ? SeverityLevel.High : SeverityLevel.Medium,
+                            ImprovementAreas = new List<string> { "API Design", "Maintainability", "Usability" }
+                        });
+                    }
                 }
             }
         }
 
-        return refactorings;
+        return refactorings.OrderByDescending(r => r.Priority)
+                          .ThenBy(r => r.FilePath)
+                          .ToList();
+    }
+
+    private string GetMethodSnippet(string[] lines, int startLine, int length)
+    {
+        var endLine = Math.Min(startLine + Math.Min(length, 15), lines.Length);
+        var snippet = string.Join("\n", lines.Skip(startLine).Take(endLine - startLine));
+        return snippet.Length > 500 ? snippet.Substring(0, 500) + "\n..." : snippet;
+    }
+
+    private string GetContextSnippet(string[] lines, int centerLine, int contextSize)
+    {
+        var start = Math.Max(0, centerLine - contextSize / 2);
+        var end = Math.Min(lines.Length, centerLine + contextSize / 2 + 1);
+        return string.Join("\n", lines.Skip(start).Take(end - start));
+    }
+
+    private string ExtractMethodNameFromLine(string line)
+    {
+        // Try to extract method name from various patterns
+        var patterns = new[]
+        {
+            @"(?:public|private|protected|internal)?\s*(?:static)?\s*(?:async)?\s*\w+\s+(\w+)\s*\(",
+            @"function\s+(\w+)\s*\(",
+            @"const\s+(\w+)\s*=\s*(?:async)?\s*\(",
+        };
+
+        foreach (var pattern in patterns)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(line, pattern);
+            if (match.Success && match.Groups.Count > 1)
+                return match.Groups[1].Value;
+        }
+
+        return "UnknownMethod";
+    }
+
+    private string GenerateConstantName(string line, string number)
+    {
+        // Try to infer constant name from context
+        if (line.Contains("max") || line.Contains("Max"))
+            return $"MAX_VALUE_{number}";
+        if (line.Contains("min") || line.Contains("Min"))
+            return $"MIN_VALUE_{number}";
+        if (line.Contains("size") || line.Contains("Size"))
+            return $"DEFAULT_SIZE_{number}";
+        if (line.Contains("limit") || line.Contains("Limit"))
+            return $"LIMIT_{number}";
+        if (line.Contains("count") || line.Contains("Count"))
+            return $"DEFAULT_COUNT_{number}";
+        if (line.Contains("timeout") || line.Contains("Timeout"))
+            return $"TIMEOUT_MS_{number}";
+
+        return $"CONSTANT_{number}";
     }
 
     /// <summary>
@@ -853,207 +977,271 @@ duplicatedCode, locations (array with filePath, startLine, endLine, methodName, 
     private List<CodeDuplication> GenerateMockDuplications(List<CodeFile> files)
     {
         var duplications = new List<CodeDuplication>();
-        var random = new Random(42);
 
         if (files.Count < 2) return duplications;
 
-        // Generate comprehensive duplications across different categories
+        // Filter out SQL files - only process UI and API files
+        var filteredFiles = files.Where(f =>
+            !f.FilePath.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) &&
+            f.FileType != FileType.SQL &&
+            f.Content.Length > 100
+        ).ToList();
 
-        // 1. Exact Matches - Duplicate validation logic
-        for (int i = 0; i < Math.Min(files.Count - 1, 15); i++)
+        if (filteredFiles.Count < 2) return duplications;
+
+        // Find genuine code duplications
+        const int minBlockSize = 5; // Minimum lines for a code block
+        const int minSimilarity = 70; // Minimum similarity percentage
+
+        // Create code blocks dictionary: normalized code -> (file, start line, end line, original code)
+        var codeBlocks = new Dictionary<string, List<(CodeFile file, int startLine, int endLine, string originalCode)>>();
+
+        foreach (var file in filteredFiles)
         {
-            var file1 = files[i];
-            var file2 = files[i + 1];
+            var lines = file.Content.Split(new[] { '\r', '\n' }, StringSplitOptions.None);
 
-            var validationTypes = new[] {
-                ("Email validation", "validateEmail", "if (!email.match(/^[^@]+@[^@]+$/)) throw new Error('Invalid email');"),
-                ("Null check", "checkNull", "if (value == null || value === undefined) return false;"),
-                ("Empty string check", "checkEmpty", "if (str == null || str.trim() === '') throw new Error('Empty string');"),
-                ("Number validation", "validateNumber", "if (isNaN(num) || num < 0) throw new Error('Invalid number');"),
-                ("Array validation", "validateArray", "if (!Array.isArray(arr) || arr.length === 0) return false;")
-            };
-
-            if (i < validationTypes.Length)
+            // Extract code blocks of varying sizes
+            for (int blockSize = minBlockSize; blockSize <= Math.Min(20, lines.Length); blockSize++)
             {
-                var validation = validationTypes[i];
-                duplications.Add(new CodeDuplication
+                for (int i = 0; i <= lines.Length - blockSize; i++)
                 {
-                    DuplicatedCode = validation.Item3,
-                    Locations = new List<DuplicationLocation>
+                    var block = lines.Skip(i).Take(blockSize).ToArray();
+                    var originalCode = string.Join("\n", block);
+
+                    // Normalize code for comparison (remove comments, extra whitespace)
+                    var normalized = NormalizeCode(originalCode);
+
+                    // Skip if block is too small after normalization or is mostly comments
+                    if (normalized.Length < 50 || string.IsNullOrWhiteSpace(normalized)) continue;
+
+                    if (!codeBlocks.ContainsKey(normalized))
                     {
-                        new() { FilePath = file1.FilePath, StartLine = 45 + i * 10, EndLine = 47 + i * 10, MethodName = validation.Item2, ClassName = ExtractClassName(file1.FilePath) },
-                        new() { FilePath = file2.FilePath, StartLine = 123 + i * 8, EndLine = 125 + i * 8, MethodName = validation.Item2 + "Data", ClassName = ExtractClassName(file2.FilePath) }
-                    },
-                    Type = DuplicationType.ExactMatch,
-                    LineCount = 3,
-                    SimilarityPercentage = 100,
-                    Description = $"Exact duplicate {validation.Item1} found in 2 files",
-                    Suggestion = $"Extract {validation.Item1} into a shared validation utility to eliminate duplication",
-                    Impact = random.Next(0, 100) < 40 ? SeverityLevel.High : SeverityLevel.Medium,
-                    RefactoringOptions = new List<string> { "Extract to utility method", "Create validation service", "Use validator class" },
-                    EstimatedEffort = "Low"
-                });
+                        codeBlocks[normalized] = new List<(CodeFile, int, int, string)>();
+                    }
+
+                    codeBlocks[normalized].Add((file, i + 1, i + blockSize, originalCode));
+                }
             }
         }
 
-        // 2. Structural Matches - Similar patterns across services
-        for (int i = 0; i < Math.Min(files.Count - 2, 12); i += 3)
+        // Find duplicates - blocks that appear in multiple locations
+        var duplicateBlocks = codeBlocks
+            .Where(kvp => kvp.Value.Count > 1)
+            .Where(kvp => kvp.Value.Select(v => v.file.FilePath).Distinct().Count() > 1) // Must be in different files
+            .OrderByDescending(kvp => kvp.Key.Length) // Prioritize longer duplications
+            .ToList();
+
+        // Track already reported duplications to avoid overlapping reports
+        var reportedLocations = new HashSet<string>();
+
+        foreach (var duplicateBlock in duplicateBlocks.Take(50)) // Limit to top 50
         {
-            if (i + 2 >= files.Count) break;
+            var locations = duplicateBlock.Value;
+            var normalizedCode = duplicateBlock.Key;
 
-            var patterns = new[] {
-                ("API call pattern", "HTTP request with error handling", "Create base HTTP service class"),
-                ("Database query pattern", "Repository pattern with error handling", "Create base repository class"),
-                ("Event handler pattern", "Event subscription and cleanup", "Use event manager service"),
-                ("Logging pattern", "Structured logging with context", "Create logging service wrapper")
-            };
+            // Check if any location already reported
+            var locationKey = string.Join("|", locations.Select(l => $"{l.file.FilePath}:{l.startLine}"));
+            if (reportedLocations.Contains(locationKey)) continue;
 
-            var patternIndex = i / 3;
-            if (patternIndex < patterns.Length)
+            // Get the original code from first occurrence
+            var originalCode = locations.First().originalCode;
+            var lineCount = originalCode.Split('\n').Length;
+
+            // Calculate average similarity
+            var similarities = new List<double>();
+            for (int i = 0; i < locations.Count - 1; i++)
             {
-                var pattern = patterns[patternIndex];
-                duplications.Add(new CodeDuplication
+                for (int j = i + 1; j < locations.Count; j++)
                 {
-                    DuplicatedCode = @"try {
-    const result = await operation();
-    return processResult(result);
-} catch (error) {
-    logger.error('Operation failed', error);
-    throw error;
-}",
-                    Locations = new List<DuplicationLocation>
-                    {
-                        new() { FilePath = files[i].FilePath, StartLine = 78 + i * 5, EndLine = 85 + i * 5, MethodName = "executeOperation" + i, ClassName = ExtractClassName(files[i].FilePath) },
-                        new() { FilePath = files[i + 1].FilePath, StartLine = 156 + i * 3, EndLine = 163 + i * 3, MethodName = "performAction" + i, ClassName = ExtractClassName(files[i + 1].FilePath) },
-                        new() { FilePath = files[i + 2].FilePath, StartLine = 92 + i * 4, EndLine = 99 + i * 4, MethodName = "runTask" + i, ClassName = ExtractClassName(files[i + 2].FilePath) }
-                    },
-                    Type = DuplicationType.StructuralMatch,
-                    LineCount = 8,
-                    SimilarityPercentage = 95 - random.Next(0, 10),
-                    Description = $"{pattern.Item1}: {pattern.Item2} repeated across {3} files",
-                    Suggestion = pattern.Item3 + " to centralize common patterns",
-                    Impact = SeverityLevel.Medium,
-                    RefactoringOptions = new List<string> { "Create base class", "Extract to utility", "Use design pattern" },
-                    EstimatedEffort = "Medium"
-                });
+                    var sim = CalculateSimilarity(locations[i].originalCode, locations[j].originalCode);
+                    similarities.Add(sim);
+                }
             }
-        }
+            var avgSimilarity = similarities.Any() ? similarities.Average() : 100;
 
-        // 3. Logical Matches - Similar logic with different implementations
-        for (int i = 0; i < Math.Min(files.Count - 1, 20); i++)
-        {
-            var logicPatterns = new[] {
-                ("Data transformation", "Mapping objects to DTOs", "Create generic mapper utility"),
-                ("Filtering logic", "Array filtering with conditions", "Extract to filter service"),
-                ("Sorting algorithm", "Custom sorting implementation", "Use built-in sort with comparator"),
-                ("Search functionality", "Linear search in collections", "Create search utility service"),
-                ("Format conversion", "Converting between data formats", "Use format converter service"),
-                ("State management", "Updating component state", "Use state management library"),
-                ("Cache invalidation", "Manual cache clearing logic", "Use cache manager service"),
-                ("Date formatting", "Custom date format conversion", "Use date utility library"),
-                ("String manipulation", "Parsing and formatting strings", "Create string utility class"),
-                ("Permission checking", "Role-based access logic", "Use authorization service")
-            };
+            if (avgSimilarity < minSimilarity) continue;
 
-            if (i < logicPatterns.Length && i + 1 < files.Count)
+            // Determine duplication type based on similarity
+            var duplicationType = avgSimilarity >= 95 ? DuplicationType.ExactMatch :
+                                  avgSimilarity >= 85 ? DuplicationType.StructuralMatch :
+                                  avgSimilarity >= 75 ? DuplicationType.LogicalMatch :
+                                  DuplicationType.PartialMatch;
+
+            // Determine impact based on line count and number of duplications
+            var impact = lineCount > 50 || locations.Count > 5 ? SeverityLevel.High :
+                         lineCount > 20 || locations.Count > 3 ? SeverityLevel.Medium :
+                         SeverityLevel.Low;
+
+            // Extract method names from code if possible
+            var duplicationLocations = locations.Select(loc => new DuplicationLocation
             {
-                var logic = logicPatterns[i];
-                duplications.Add(new CodeDuplication
-                {
-                    DuplicatedCode = @"const result = collection
-    .filter(item => item.isActive)
-    .map(item => transform(item))
-    .sort((a, b) => compare(a, b));",
-                    Locations = new List<DuplicationLocation>
-                    {
-                        new() { FilePath = files[i].FilePath, StartLine = 234 + i * 6, EndLine = 238 + i * 6, MethodName = "process" + i, ClassName = ExtractClassName(files[i].FilePath) },
-                        new() { FilePath = files[i + 1].FilePath, StartLine = 445 + i * 4, EndLine = 449 + i * 4, MethodName = "handle" + i, ClassName = ExtractClassName(files[i + 1].FilePath) }
-                    },
-                    Type = DuplicationType.LogicalMatch,
-                    LineCount = 5,
-                    SimilarityPercentage = 85 + random.Next(0, 10),
-                    Description = $"{logic.Item1}: {logic.Item2} duplicated across files",
-                    Suggestion = logic.Item3,
-                    Impact = random.Next(0, 100) < 30 ? SeverityLevel.Medium : SeverityLevel.Low,
-                    RefactoringOptions = new List<string> { "Create utility function", "Use library method", "Extract to service" },
-                    EstimatedEffort = "Low"
-                });
-            }
-        }
-
-        // 4. Functional Matches - Same functionality, different syntax
-        for (int i = 0; i < Math.Min(files.Count - 1, 10); i++)
-        {
-            var functionalPatterns = new[] {
-                ("Configuration loading", "Reading and parsing config files"),
-                ("Error message formatting", "Formatting error messages for display"),
-                ("URL construction", "Building API endpoint URLs"),
-                ("Query string building", "Creating query parameters"),
-                ("Response parsing", "Parsing API response data"),
-                ("Token generation", "Creating authentication tokens"),
-                ("ID generation", "Generating unique identifiers"),
-                ("Hash calculation", "Computing data hashes"),
-                ("File path resolution", "Resolving relative file paths"),
-                ("Dependency resolution", "Resolving service dependencies")
-            };
-
-            if (i < functionalPatterns.Length && i + 1 < files.Count)
-            {
-                var func = functionalPatterns[i];
-                duplications.Add(new CodeDuplication
-                {
-                    DuplicatedCode = @"function buildUrl(base, path, params) {
-    let url = base + '/' + path;
-    if (params) url += '?' + Object.keys(params).map(k => k + '=' + params[k]).join('&');
-    return url;
-}",
-                    Locations = new List<DuplicationLocation>
-                    {
-                        new() { FilePath = files[i].FilePath, StartLine = 156 + i * 7, EndLine = 161 + i * 7, MethodName = "utility" + i, ClassName = ExtractClassName(files[i].FilePath) },
-                        new() { FilePath = files[i + 1].FilePath, StartLine = 289 + i * 5, EndLine = 294 + i * 5, MethodName = "helper" + i, ClassName = ExtractClassName(files[i + 1].FilePath) }
-                    },
-                    Type = DuplicationType.FunctionalMatch,
-                    LineCount = 6,
-                    SimilarityPercentage = 88 + random.Next(0, 8),
-                    Description = $"{func.Item1}: {func.Item2} implemented multiple times",
-                    Suggestion = "Consolidate into single reusable function in shared utilities",
-                    Impact = SeverityLevel.Low,
-                    RefactoringOptions = new List<string> { "Extract to shared module", "Use utility library", "Create helper class" },
-                    EstimatedEffort = "Low"
-                });
-            }
-        }
-
-        // 5. Partial Matches - Code blocks with variations
-        for (int i = 0; i < Math.Min(files.Count - 1, 8); i++)
-        {
-            if (i + 1 >= files.Count) break;
+                FilePath = loc.file.FilePath,
+                StartLine = loc.startLine,
+                EndLine = loc.endLine,
+                MethodName = ExtractMethodName(loc.originalCode),
+                ClassName = ExtractClassName(loc.file.FilePath)
+            }).ToList();
 
             duplications.Add(new CodeDuplication
             {
-                DuplicatedCode = @"async function processData(input) {
-    validate(input);
-    const transformed = transform(input);
-    await save(transformed);
-    return transformed;
-}",
-                Locations = new List<DuplicationLocation>
-                {
-                    new() { FilePath = files[i].FilePath, StartLine = 312 + i * 8, EndLine = 318 + i * 8, MethodName = "process" + i, ClassName = ExtractClassName(files[i].FilePath) },
-                    new() { FilePath = files[i + 1].FilePath, StartLine = 523 + i * 6, EndLine = 529 + i * 6, MethodName = "execute" + i, ClassName = ExtractClassName(files[i + 1].FilePath) }
-                },
-                Type = DuplicationType.PartialMatch,
-                LineCount = 7,
-                SimilarityPercentage = 75 + random.Next(0, 15),
-                Description = $"Partial code duplication in data processing workflow with slight variations",
-                Suggestion = "Extract common workflow into template method pattern with customizable steps",
-                Impact = SeverityLevel.Low,
-                RefactoringOptions = new List<string> { "Template method pattern", "Strategy pattern", "Extract base class" },
-                EstimatedEffort = "Medium"
+                DuplicatedCode = originalCode.Trim(),
+                Locations = duplicationLocations,
+                Type = duplicationType,
+                LineCount = lineCount,
+                SimilarityPercentage = Math.Round(avgSimilarity, 1),
+                Description = $"Code duplication found in {locations.Count} locations across {locations.Select(l => l.file.FilePath).Distinct().Count()} files",
+                Suggestion = GenerateSuggestion(originalCode, lineCount, locations.Count),
+                Impact = impact,
+                RefactoringOptions = GenerateRefactoringOptions(originalCode, lineCount),
+                EstimatedEffort = lineCount > 30 ? "Medium" : "Low"
             });
+
+            reportedLocations.Add(locationKey);
         }
 
-        return duplications;
+        return duplications.OrderByDescending(d => d.Impact)
+                          .ThenByDescending(d => d.LineCount)
+                          .ToList();
+    }
+
+    private string NormalizeCode(string code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return "";
+
+        // Remove single-line comments
+        var lines = code.Split('\n');
+        var normalized = new System.Text.StringBuilder();
+
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+
+            // Skip empty lines and comments
+            if (string.IsNullOrWhiteSpace(trimmed) ||
+                trimmed.StartsWith("//") ||
+                trimmed.StartsWith("/*") ||
+                trimmed.StartsWith("*") ||
+                trimmed.StartsWith("*/") ||
+                trimmed.StartsWith("#") ||
+                trimmed.StartsWith("<!--"))
+                continue;
+
+            // Remove inline comments
+            var codeOnly = trimmed;
+            var commentIndex = codeOnly.IndexOf("//");
+            if (commentIndex >= 0)
+                codeOnly = codeOnly.Substring(0, commentIndex).Trim();
+
+            // Normalize whitespace
+            codeOnly = System.Text.RegularExpressions.Regex.Replace(codeOnly, @"\s+", " ");
+
+            if (!string.IsNullOrWhiteSpace(codeOnly))
+                normalized.AppendLine(codeOnly);
+        }
+
+        return normalized.ToString().Trim();
+    }
+
+    private double CalculateSimilarity(string code1, string code2)
+    {
+        if (string.IsNullOrEmpty(code1) || string.IsNullOrEmpty(code2)) return 0;
+
+        var norm1 = NormalizeCode(code1);
+        var norm2 = NormalizeCode(code2);
+
+        if (norm1 == norm2) return 100;
+
+        // Levenshtein distance based similarity
+        var maxLength = Math.Max(norm1.Length, norm2.Length);
+        if (maxLength == 0) return 100;
+
+        var distance = LevenshteinDistance(norm1, norm2);
+        return Math.Max(0, (1.0 - (double)distance / maxLength) * 100);
+    }
+
+    private int LevenshteinDistance(string s1, string s2)
+    {
+        if (string.IsNullOrEmpty(s1)) return s2?.Length ?? 0;
+        if (string.IsNullOrEmpty(s2)) return s1.Length;
+
+        var len1 = s1.Length;
+        var len2 = s2.Length;
+        var matrix = new int[len1 + 1, len2 + 1];
+
+        for (int i = 0; i <= len1; i++) matrix[i, 0] = i;
+        for (int j = 0; j <= len2; j++) matrix[0, j] = j;
+
+        for (int i = 1; i <= len1; i++)
+        {
+            for (int j = 1; j <= len2; j++)
+            {
+                var cost = (s1[i - 1] == s2[j - 1]) ? 0 : 1;
+                matrix[i, j] = Math.Min(Math.Min(
+                    matrix[i - 1, j] + 1,
+                    matrix[i, j - 1] + 1),
+                    matrix[i - 1, j - 1] + cost);
+            }
+        }
+
+        return matrix[len1, len2];
+    }
+
+    private string ExtractMethodName(string code)
+    {
+        var patterns = new[]
+        {
+            @"(public|private|protected|internal)?\s*(async\s+)?(void|Task|string|int|bool|var)\s+(\w+)\s*\(",
+            @"function\s+(\w+)\s*\(",
+            @"const\s+(\w+)\s*=\s*\(",
+            @"(\w+)\s*\(\s*\)\s*=>",
+            @"def\s+(\w+)\s*\("
+        };
+
+        foreach (var pattern in patterns)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(code, pattern);
+            if (match.Success)
+            {
+                var groups = match.Groups;
+                return groups[groups.Count - 1].Value;
+            }
+        }
+
+        return "Unknown";
+    }
+
+    private string GenerateSuggestion(string code, int lineCount, int occurrences)
+    {
+        if (code.Contains("service") || code.Contains("Service"))
+            return $"Extract this {lineCount}-line code block into a shared service method to eliminate {occurrences} duplications";
+        if (code.Contains("component") || code.Contains("Component"))
+            return $"Create a reusable component to replace these {occurrences} duplicate implementations";
+        if (code.Contains("valid") || code.Contains("check"))
+            return $"Consolidate validation logic into a shared utility function ({occurrences} duplications found)";
+        if (code.Contains("async") || code.Contains("await"))
+            return $"Extract async operation into a base class or utility method ({occurrences} duplications detected)";
+
+        return $"Extract this {lineCount}-line duplicate code into a shared utility method to eliminate {occurrences} occurrences";
+    }
+
+    private List<string> GenerateRefactoringOptions(string code, int lineCount)
+    {
+        var options = new List<string>();
+
+        if (code.Contains("class") || code.Contains("public"))
+            options.Add("Extract to base class");
+
+        options.Add("Create utility method");
+
+        if (code.Contains("async") || code.Contains("await"))
+            options.Add("Extract to async service");
+
+        if (lineCount > 15)
+            options.Add("Consider design pattern (Template Method/Strategy)");
+        else
+            options.Add("Extract to helper function");
+
+        return options;
     }
 
     private string ExtractClassName(string filePath)
@@ -1248,108 +1436,83 @@ duplicatedCode, locations (array with filePath, startLine, endLine, methodName, 
         var violations = new List<Violation>();
         var random = new Random(42); // Fixed seed for consistent results
 
-        // Analyze each file for potential violations
+        // Analyze each file for potential violations with language-specific detection
         foreach (var file in files.Where(f => f.FileType != FileType.Markdown && f.Content.Length > 50))
         {
-            var fileContent = file.Content.ToLower();
-            var lines = file.Content.Split('\n');
+            var extension = Path.GetExtension(file.FilePath).ToLowerInvariant();
+            var fileContent = file.Content;
+            var fileContentLower = fileContent.ToLower();
+            var lines = fileContent.Split('\n');
 
-            // Naming convention violations
-            if (fileContent.Contains("_") && (fileContent.Contains("var ") || fileContent.Contains("public ") || fileContent.Contains("private ")))
+            // Language-specific violation detection - Supporting 25+ programming languages
+            violations.AddRange(extension switch
             {
-                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
-                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
-                violations.Add(new Violation
-                {
-                    FilePath = file.FilePath,
-                    LineNumber = startLine,
-                    EndLineNumber = endLine,
-                    RuleName = "Naming Convention Standard",
-                    Description = "Variable or method naming does not follow camelCase/PascalCase convention",
-                    Type = ViolationType.NamingConvention,
-                    Severity = SeverityLevel.Medium,
-                    CodeSnippet = snippet,
-                    SuggestedFix = "Use camelCase for variables and PascalCase for classes/methods"
-                });
-            }
+                // C-family languages
+                ".cs" => DetectCSharpViolations(file, fileContent, fileContentLower, lines, random),
+                ".c" or ".h" => DetectCViolations(file, fileContent, fileContentLower, lines, random),
+                ".cpp" or ".hpp" or ".cc" or ".cxx" or ".h++" => DetectCppViolations(file, fileContent, fileContentLower, lines, random),
+                ".m" or ".mm" => DetectObjectiveCViolations(file, fileContent, fileContentLower, lines, random),
 
-            // Missing error handling
-            if ((fileContent.Contains("try") && !fileContent.Contains("catch")) ||
-                (!fileContent.Contains("try") && fileContent.Contains("await") && fileContent.Contains("async")))
-            {
-                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
-                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
-                violations.Add(new Violation
-                {
-                    FilePath = file.FilePath,
-                    LineNumber = startLine,
-                    EndLineNumber = endLine,
-                    RuleName = "Error Handling Required",
-                    Description = "Asynchronous operations should include proper error handling",
-                    Type = ViolationType.ErrorHandling,
-                    Severity = SeverityLevel.High,
-                    CodeSnippet = snippet,
-                    SuggestedFix = "Wrap async operations in try-catch blocks"
-                });
-            }
+                // JVM languages
+                ".java" => DetectJavaViolations(file, fileContent, fileContentLower, lines, random),
+                ".kt" or ".kts" => DetectKotlinViolations(file, fileContent, fileContentLower, lines, random),
+                ".scala" => DetectScalaViolations(file, fileContent, fileContentLower, lines, random),
+                ".groovy" => DetectGroovyViolations(file, fileContent, fileContentLower, lines, random),
+                ".clj" or ".cljs" => DetectClojureViolations(file, fileContent, fileContentLower, lines, random),
 
-            // Missing documentation
-            if ((fileContent.Contains("public class") || fileContent.Contains("public interface")) &&
-                !fileContent.Contains("///") && !fileContent.Contains("/**"))
-            {
-                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, 1);
-                violations.Add(new Violation
-                {
-                    FilePath = file.FilePath,
-                    LineNumber = startLine,
-                    EndLineNumber = endLine,
-                    RuleName = "Documentation Required",
-                    Description = "Public classes and interfaces should have XML documentation comments",
-                    Type = ViolationType.Documentation,
-                    Severity = SeverityLevel.Low,
-                    CodeSnippet = snippet,
-                    SuggestedFix = "Add /// <summary> documentation comments"
-                });
-            }
+                // JavaScript/TypeScript ecosystem
+                ".js" or ".mjs" or ".cjs" => DetectJavaScriptViolations(file, fileContent, fileContentLower, lines, random),
+                ".ts" or ".mts" or ".cts" => DetectTypeScriptViolations(file, fileContent, fileContentLower, lines, random),
+                ".jsx" => DetectReactJSXViolations(file, fileContent, fileContentLower, lines, random),
+                ".tsx" => DetectReactTSXViolations(file, fileContent, fileContentLower, lines, random),
+                ".vue" => DetectVueViolations(file, fileContent, fileContentLower, lines, random),
 
-            // Hardcoded strings/configuration
-            if (fileContent.Contains("\"localhost\"") || fileContent.Contains("\"127.0.0.1\"") ||
-                fileContent.Contains("\"password\"") || fileContent.Contains("connectionstring"))
-            {
-                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
-                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
-                violations.Add(new Violation
-                {
-                    FilePath = file.FilePath,
-                    LineNumber = startLine,
-                    EndLineNumber = endLine,
-                    RuleName = "Configuration Management",
-                    Description = "Hardcoded configuration values should be moved to configuration files",
-                    Type = ViolationType.Security,
-                    Severity = SeverityLevel.Critical,
-                    CodeSnippet = snippet,
-                    SuggestedFix = "Use IConfiguration or environment variables"
-                });
-            }
+                // Python
+                ".py" or ".pyw" or ".pyi" => DetectPythonViolations(file, fileContent, fileContentLower, lines, random),
 
-            // Performance: String concatenation in loops
-            if (fileContent.Contains("for") && fileContent.Contains("+=") && fileContent.Contains("string"))
-            {
-                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
-                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
-                violations.Add(new Violation
-                {
-                    FilePath = file.FilePath,
-                    LineNumber = startLine,
-                    EndLineNumber = endLine,
-                    RuleName = "Performance Best Practice",
-                    Description = "String concatenation in loops causes performance issues",
-                    Type = ViolationType.Performance,
-                    Severity = SeverityLevel.Medium,
-                    CodeSnippet = snippet,
-                    SuggestedFix = "Use StringBuilder for string concatenation in loops"
-                });
-            }
+                // Web languages
+                ".php" => DetectPHPViolations(file, fileContent, fileContentLower, lines, random),
+                ".rb" or ".rake" => DetectRubyViolations(file, fileContent, fileContentLower, lines, random),
+
+                // Systems languages
+                ".go" => DetectGoViolations(file, fileContent, fileContentLower, lines, random),
+                ".rs" => DetectRustViolations(file, fileContent, fileContentLower, lines, random),
+                ".swift" => DetectSwiftViolations(file, fileContent, fileContentLower, lines, random),
+
+                // Functional languages
+                ".fs" or ".fsx" or ".fsi" => DetectFSharpViolations(file, fileContent, fileContentLower, lines, random),
+                ".hs" or ".lhs" => DetectHaskellViolations(file, fileContent, fileContentLower, lines, random),
+                ".ex" or ".exs" => DetectElixirViolations(file, fileContent, fileContentLower, lines, random),
+                ".erl" or ".hrl" => DetectErlangViolations(file, fileContent, fileContentLower, lines, random),
+
+                // Mobile
+                ".dart" => DetectDartViolations(file, fileContent, fileContentLower, lines, random),
+
+                // Scripting languages
+                ".sh" or ".bash" or ".zsh" => DetectShellViolations(file, fileContent, fileContentLower, lines, random),
+                ".ps1" or ".psm1" or ".psd1" => DetectPowerShellViolations(file, fileContent, fileContentLower, lines, random),
+                ".lua" => DetectLuaViolations(file, fileContent, fileContentLower, lines, random),
+                ".perl" or ".pl" or ".pm" => DetectPerlViolations(file, fileContent, fileContentLower, lines, random),
+
+                // Data science & scientific
+                ".r" or ".R" => DetectRViolations(file, fileContent, fileContentLower, lines, random),
+                ".jl" => DetectJuliaViolations(file, fileContent, fileContentLower, lines, random),
+
+                // Database
+                ".sql" => DetectSQLViolations(file, fileContent, fileContentLower, lines, random),
+
+                // .NET
+                ".vb" => DetectVBNetViolations(file, fileContent, fileContentLower, lines, random),
+
+                // Blockchain
+                ".sol" => DetectSolidityViolations(file, fileContent, fileContentLower, lines, random),
+
+                // Markup with logic
+                ".xml" or ".xaml" => DetectXMLViolations(file, fileContent, fileContentLower, lines, random),
+                ".yaml" or ".yml" => DetectYAMLViolations(file, fileContent, fileContentLower, lines, random),
+
+                _ => new List<Violation>()
+            });
         }
 
         // Add some general violations if none were found
@@ -1374,151 +1537,1972 @@ duplicatedCode, locations (array with filePath, startLine, endLine, methodName, 
         return violations;
     }
 
+    #region Language-Specific Violation Detection
+
+    private List<Violation> DetectCSharpViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Missing async/await error handling
+        if (contentLower.Contains("async") && contentLower.Contains("await") && !contentLower.Contains("try"))
+        {
+            var lineNum = FindLineContaining(lines, "await", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Async Error Handling",
+                Description = "Async methods should have proper try-catch blocks to handle exceptions",
+                Type = ViolationType.ErrorHandling,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Wrap await operations in try-catch: try { await operation(); } catch (Exception ex) { _logger.LogError(ex, \"Error\"); throw; }"
+            });
+        }
+
+        // 2. Missing null checks (not using null-conditional operator)
+        if (content.Contains(".") && !contentLower.Contains("?.") && (contentLower.Contains("var ") || contentLower.Contains("return ")))
+        {
+            var lineNum = FindLineContaining(lines, ".", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Null Safety",
+                Description = "Object property access without null checking can cause NullReferenceException",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use null-conditional operator: object?.Property or add explicit null check: if (object != null) { ... }"
+            });
+        }
+
+        // 3. Missing XML documentation
+        if ((contentLower.Contains("public class") || contentLower.Contains("public interface") || contentLower.Contains("public async")) &&
+            !content.Contains("///"))
+        {
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, 1);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Documentation Standard",
+                Description = "Public classes, interfaces, and methods should have XML documentation comments",
+                Type = ViolationType.Documentation,
+                Severity = SeverityLevel.Low,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add XML documentation: /// <summary>Description of class/method</summary>"
+            });
+        }
+
+        // 4. Hardcoded configuration values
+        if (contentLower.Contains("connectionstring") || contentLower.Contains("\"localhost\"") ||
+            contentLower.Contains("\"password\"") || contentLower.Contains("\"apikey\""))
+        {
+            var lineNum = FindLineContaining(lines, "localhost|password|apikey|connectionstring", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Configuration Management",
+                Description = "Hardcoded credentials or connection strings pose security risks",
+                Type = ViolationType.Security,
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                SuggestedFix = "Move to appsettings.json and use IConfiguration: var connString = _configuration[\"ConnectionStrings:Default\"];"
+            });
+        }
+
+        // 5. Missing IDisposable pattern
+        if ((contentLower.Contains("new stream") || contentLower.Contains("new sqlconnection") || contentLower.Contains("new httpclient")) &&
+            !contentLower.Contains("using"))
+        {
+            var lineNum = FindLineContaining(lines, "new ", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Resource Management",
+                Description = "IDisposable resources should be wrapped in using statements to prevent memory leaks",
+                Type = ViolationType.Performance,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use using statement: using (var resource = new Resource()) { ... } or using var resource = new Resource();"
+            });
+        }
+
+        // 6. String concatenation in loops
+        if (contentLower.Contains("for") && contentLower.Contains("+=") && contentLower.Contains("string"))
+        {
+            var lineNum = FindLineContaining(lines, "for|foreach", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Performance Optimization",
+                Description = "String concatenation in loops creates multiple string objects, impacting performance",
+                Type = ViolationType.Performance,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use StringBuilder: var sb = new StringBuilder(); foreach(...) { sb.Append(value); } return sb.ToString();"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectSQLViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Missing error handling
+        if (!contentLower.Contains("begin try") && !contentLower.Contains("begin catch") && content.Length > 200)
+        {
+            var lineNum = random.Next(1, Math.Max(2, lines.Length));
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "SQL Error Handling",
+                Description = "Stored procedures should include TRY-CATCH blocks for robust error handling",
+                Type = ViolationType.ErrorHandling,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add error handling: BEGIN TRY ... END TRY BEGIN CATCH SELECT ERROR_MESSAGE(); THROW; END CATCH"
+            });
+        }
+
+        // 2. Missing SET NOCOUNT ON
+        if (contentLower.Contains("procedure") && !contentLower.Contains("set nocount on"))
+        {
+            var lineNum = FindLineContaining(lines, "PROCEDURE", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "SQL Performance",
+                Description = "Missing SET NOCOUNT ON can impact performance by sending unnecessary messages",
+                Type = ViolationType.Performance,
+                Severity = SeverityLevel.Low,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add at the beginning of stored procedure: SET NOCOUNT ON;"
+            });
+        }
+
+        // 3. SQL Injection risk from dynamic SQL
+        if (contentLower.Contains("exec(") || contentLower.Contains("execute(") ||
+            (contentLower.Contains("@sql") && contentLower.Contains("+")))
+        {
+            var lineNum = FindLineContaining(lines, "EXEC|EXECUTE|@sql", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "SQL Injection Prevention",
+                Description = "Dynamic SQL with string concatenation is vulnerable to SQL injection attacks",
+                Type = ViolationType.Security,
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use sp_executesql with parameters: EXEC sp_executesql @sql, N'@Param INT', @Param = @Value"
+            });
+        }
+
+        // 4. Missing transaction handling for multi-statement operations
+        if (contentLower.Contains("insert") && contentLower.Contains("update") && !contentLower.Contains("begin transaction"))
+        {
+            var lineNum = FindLineContaining(lines, "INSERT|UPDATE", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Transaction Management",
+                Description = "Multiple DML operations should be wrapped in explicit transactions for data consistency",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use explicit transaction: BEGIN TRANSACTION; ... COMMIT TRANSACTION; (with error handling)"
+            });
+        }
+
+        // 5. SELECT * usage
+        if (contentLower.Contains("select *"))
+        {
+            var lineNum = FindLineContaining(lines, "SELECT \\*", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "SQL Best Practice",
+                Description = "SELECT * should be avoided; explicitly specify required columns for better performance",
+                Type = ViolationType.Performance,
+                Severity = SeverityLevel.Low,
+                CodeSnippet = snippet,
+                SuggestedFix = "Specify columns explicitly: SELECT Column1, Column2, Column3 FROM Table"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectJavaScriptViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Using var instead of let/const
+        if (contentLower.Contains("var "))
+        {
+            var lineNum = FindLineContaining(lines, "var ", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Modern JavaScript Standards",
+                Description = "Use 'let' or 'const' instead of 'var' for better scoping and immutability",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Replace var with const (for immutable) or let (for mutable): const value = ...; or let counter = ...;"
+            });
+        }
+
+        // 2. Missing error handling in promises
+        if (contentLower.Contains(".then(") && !contentLower.Contains(".catch("))
+        {
+            var lineNum = FindLineContaining(lines, ".then\\(", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Promise Error Handling",
+                Description = "Promise chains should include .catch() to handle rejection errors",
+                Type = ViolationType.ErrorHandling,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add error handler: promise.then(result => {...}).catch(error => console.error(error));"
+            });
+        }
+
+        // 3. Console.log in production code
+        if (contentLower.Contains("console.log"))
+        {
+            var lineNum = FindLineContaining(lines, "console\\.log", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Production Code Quality",
+                Description = "console.log statements should be removed from production code",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Low,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use proper logging library or remove console.log statements before production deployment"
+            });
+        }
+
+        // 4. == instead of ===
+        if (content.Contains("==") && !content.Contains("==="))
+        {
+            var lineNum = FindLineContaining(lines, "==", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Type Safety",
+                Description = "Use strict equality (===) instead of loose equality (==) to avoid type coercion issues",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use === for equality: if (value === expected) instead of if (value == expected)"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectTypeScriptViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // Start with JavaScript violations
+        violations.AddRange(DetectJavaScriptViolations(file, content, contentLower, lines, random));
+
+        // 1. Missing type annotations
+        if ((contentLower.Contains("function ") || contentLower.Contains("const ") || contentLower.Contains("let ")) &&
+            !content.Contains(":") && !content.Contains("<"))
+        {
+            var lineNum = FindLineContaining(lines, "function|const |let ", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "TypeScript Type Safety",
+                Description = "Add explicit type annotations for better type safety and code documentation",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add type annotations: const value: string = ...; function method(param: number): boolean { ... }"
+            });
+        }
+
+        // 2. Using 'any' type
+        if (contentLower.Contains(": any"))
+        {
+            var lineNum = FindLineContaining(lines, ": any", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "TypeScript Type Safety",
+                Description = "Avoid using 'any' type as it defeats TypeScript's type checking benefits",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use specific types or 'unknown' instead: const value: SpecificType = ... or const value: unknown = ..."
+            });
+        }
+
+        // 3. Missing null/undefined checks
+        if (!content.Contains("?") && !content.Contains("!") && (contentLower.Contains("return ") || contentLower.Contains("const ")))
+        {
+            var lineNum = FindLineContaining(lines, "return|const", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Null Safety",
+                Description = "Consider using optional chaining (?.) or nullish coalescing (??) for null safety",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use optional chaining: object?.property or nullish coalescing: value ?? defaultValue"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectReactJSXViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // Start with JavaScript violations
+        violations.AddRange(DetectJavaScriptViolations(file, content, contentLower, lines, random));
+
+        // 1. Missing key prop in lists
+        if (contentLower.Contains(".map(") && !content.Contains("key="))
+        {
+            var lineNum = FindLineContaining(lines, "\\.map\\(", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "React Best Practices",
+                Description = "Lists rendered with .map() should include a unique 'key' prop for optimal performance",
+                Type = ViolationType.Performance,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add key prop: {items.map(item => <Component key={item.id} {...item} />)}"
+            });
+        }
+
+        // 2. Inline function definitions in JSX
+        if (contentLower.Contains("onclick={() =>") || contentLower.Contains("onchange={() =>"))
+        {
+            var lineNum = FindLineContaining(lines, "onClick=\\{\\(\\)|onChange=\\{\\(\\)", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "React Performance",
+                Description = "Inline arrow functions in JSX cause unnecessary re-renders",
+                Type = ViolationType.Performance,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Define handler outside JSX: const handleClick = () => {...}; then use onClick={handleClick}"
+            });
+        }
+
+        // 3. Direct state mutation
+        if (contentLower.Contains("state.") && content.Contains("=") && !contentLower.Contains("setstate"))
+        {
+            var lineNum = FindLineContaining(lines, "state\\.", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "React State Management",
+                Description = "Never mutate state directly; use setState or state updater functions",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use setState: this.setState({...}) or useState updater: setValue(newValue)"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectReactTSXViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // Combine React and TypeScript violations
+        violations.AddRange(DetectReactJSXViolations(file, content, contentLower, lines, random));
+
+        // TSX-specific: Missing prop types interface
+        if ((contentLower.Contains("function ") || contentLower.Contains("const ")) &&
+            content.Contains("props") && !content.Contains("interface") && !content.Contains("type "))
+        {
+            var lineNum = FindLineContaining(lines, "function|const", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "React TypeScript Types",
+                Description = "Component props should have explicit TypeScript interface or type definitions",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Define props interface: interface MyComponentProps { prop1: string; prop2: number; } then use: React.FC<MyComponentProps>"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectPythonViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Missing type hints
+        if (contentLower.Contains("def ") && !content.Contains("->") && !content.Contains(":"))
+        {
+            var lineNum = FindLineContaining(lines, "def ", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Python Type Hints (PEP 484)",
+                Description = "Functions should include type hints for parameters and return values",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add type hints: def function(param: str, count: int) -> bool:"
+            });
+        }
+
+        // 2. Bare except clause
+        if (contentLower.Contains("except:") && !contentLower.Contains("except "))
+        {
+            var lineNum = FindLineContaining(lines, "except:", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Exception Handling",
+                Description = "Bare except clauses catch all exceptions, including system exits and keyboard interrupts",
+                Type = ViolationType.ErrorHandling,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Specify exception type: except ValueError: or except Exception as e:"
+            });
+        }
+
+        // 3. Mutable default arguments
+        if (contentLower.Contains("def ") && (content.Contains("=[]") || content.Contains("={}")))
+        {
+            var lineNum = FindLineContaining(lines, "=\\[\\]|=\\{\\}", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Mutable Default Arguments",
+                Description = "Mutable default arguments are shared across function calls, causing unexpected behavior",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use None as default: def func(items=None): items = items if items is not None else []"
+            });
+        }
+
+        // 4. Missing docstrings
+        if (contentLower.Contains("def ") && !content.Contains("\"\"\"") && !content.Contains("'''"))
+        {
+            var lineNum = FindLineContaining(lines, "def ", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Python Documentation (PEP 257)",
+                Description = "Public functions and classes should have docstrings describing their behavior",
+                Type = ViolationType.Documentation,
+                Severity = SeverityLevel.Low,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add docstring: def func(): \"\"\"Brief description of function.\"\"\""
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectJavaViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Missing @Override annotation
+        if (contentLower.Contains("public ") && contentLower.Contains("equals") && !content.Contains("@Override"))
+        {
+            var lineNum = FindLineContaining(lines, "equals|toString|hashCode", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Java Override Annotation",
+                Description = "Methods overriding superclass methods should use @Override annotation",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add @Override annotation above method: @Override public boolean equals(Object obj) { ... }"
+            });
+        }
+
+        // 2. Missing try-with-resources
+        if ((contentLower.Contains("new fileinputstream") || contentLower.Contains("new bufferedreader")) &&
+            !contentLower.Contains("try ("))
+        {
+            var lineNum = FindLineContaining(lines, "new File|new Buffered|new Input|new Output", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Resource Management",
+                Description = "AutoCloseable resources should use try-with-resources to ensure proper closure",
+                Type = ViolationType.ErrorHandling,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use try-with-resources: try (BufferedReader reader = new BufferedReader(...)) { ... }"
+            });
+        }
+
+        // 3. Missing JavaDoc
+        if ((contentLower.Contains("public class") || contentLower.Contains("public interface")) &&
+            !content.Contains("/**"))
+        {
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, 1);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Java Documentation",
+                Description = "Public classes and interfaces should have JavaDoc comments",
+                Type = ViolationType.Documentation,
+                Severity = SeverityLevel.Low,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add JavaDoc: /** * Description of class/interface * @author Name */"
+            });
+        }
+
+        // 4. String concatenation in loops
+        if (contentLower.Contains("for") && content.Contains("+=") && contentLower.Contains("string"))
+        {
+            var lineNum = FindLineContaining(lines, "for\\(|for ", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Performance Optimization",
+                Description = "String concatenation in loops creates unnecessary String objects",
+                Type = ViolationType.Performance,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use StringBuilder: StringBuilder sb = new StringBuilder(); for(...) { sb.append(value); } return sb.toString();"
+            });
+        }
+
+        // 5. Catching generic Exception
+        if (contentLower.Contains("catch (exception"))
+        {
+            var lineNum = FindLineContaining(lines, "catch \\(Exception", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Exception Handling Best Practice",
+                Description = "Avoid catching generic Exception; catch specific exception types",
+                Type = ViolationType.ErrorHandling,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Catch specific exceptions: catch (IOException | SQLException ex) { ... }"
+            });
+        }
+
+        return violations;
+    }
+
+    // ==================== ADDITIONAL LANGUAGE SUPPORT ====================
+    // Supporting 20+ additional programming languages
+
+    #region C/C++ and Objective-C
+
+    private List<Violation> DetectCViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Buffer overflow risk
+        if (contentLower.Contains("gets(") || contentLower.Contains("strcpy(") || contentLower.Contains("sprintf("))
+        {
+            var lineNum = FindLineContaining(lines, "gets\\(|strcpy\\(|sprintf\\(", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Buffer Overflow Prevention",
+                Description = "Unsafe C functions can cause buffer overflows and security vulnerabilities",
+                Type = ViolationType.Security,
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use safe alternatives: fgets() instead of gets(), strncpy() instead of strcpy(), snprintf() instead of sprintf()"
+            });
+        }
+
+        // 2. Missing NULL check after malloc
+        if (contentLower.Contains("malloc(") && !contentLower.Contains("if") && !contentLower.Contains("null"))
+        {
+            var lineNum = FindLineContaining(lines, "malloc\\(", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Memory Allocation Check",
+                Description = "malloc() can return NULL on failure; always check the return value",
+                Type = ViolationType.ErrorHandling,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Check for NULL: ptr = malloc(size); if (ptr == NULL) { /* handle error */ }"
+            });
+        }
+
+        // 3. Memory leak - missing free()
+        if (contentLower.Contains("malloc(") && !contentLower.Contains("free("))
+        {
+            var lineNum = FindLineContaining(lines, "malloc\\(", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Memory Management",
+                Description = "Allocated memory must be freed to prevent memory leaks",
+                Type = ViolationType.Performance,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Call free() when done: free(ptr); ptr = NULL;"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectCppViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // Include C violations
+        violations.AddRange(DetectCViolations(file, content, contentLower, lines, random));
+
+        // 1. Using new without delete
+        if (contentLower.Contains("new ") && !contentLower.Contains("delete"))
+        {
+            var lineNum = FindLineContaining(lines, "new ", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Resource Management - RAII",
+                Description = "Raw pointers with new/delete should be avoided; use smart pointers",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use smart pointers: std::unique_ptr<Type> ptr = std::make_unique<Type>(); or std::shared_ptr"
+            });
+        }
+
+        // 2. Using NULL instead of nullptr
+        if (content.Contains("NULL") && !content.Contains("nullptr"))
+        {
+            var lineNum = FindLineContaining(lines, "NULL", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Modern C++ Standards",
+                Description = "Use nullptr instead of NULL for better type safety in C++11 and later",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Low,
+                CodeSnippet = snippet,
+                SuggestedFix = "Replace NULL with nullptr: if (ptr == nullptr) { ... }"
+            });
+        }
+
+        // 3. Missing virtual destructor in base class
+        if ((contentLower.Contains("class") && contentLower.Contains("virtual")) && !contentLower.Contains("virtual ~"))
+        {
+            var lineNum = FindLineContaining(lines, "class|virtual", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Polymorphism Best Practice",
+                Description = "Classes with virtual functions should have virtual destructors",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add virtual destructor: virtual ~ClassName() = default;"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectObjectiveCViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Missing @property attributes
+        if (contentLower.Contains("@property") && !contentLower.Contains("nonatomic") && !contentLower.Contains("atomic"))
+        {
+            var lineNum = FindLineContaining(lines, "@property", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Property Declaration",
+                Description = "Properties should explicitly specify atomicity (atomic/nonatomic)",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "@property (nonatomic, strong) NSString *name; or @property (atomic, strong) NSString *name;"
+            });
+        }
+
+        // 2. Potential retain cycle
+        if (contentLower.Contains("block") && contentLower.Contains("self") && !contentLower.Contains("weak"))
+        {
+            var lineNum = FindLineContaining(lines, "self", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Retain Cycle Prevention",
+                Description = "Using 'self' in blocks can cause retain cycles",
+                Type = ViolationType.Performance,
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use weak reference: __weak typeof(self) weakSelf = self; then use weakSelf in block"
+            });
+        }
+
+        return violations;
+    }
+
+    #endregion
+
+    #region JVM Languages (Kotlin, Scala, Groovy, Clojure)
+
+    private List<Violation> DetectKotlinViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Using !! (not-null assertion) operator
+        if (content.Contains("!!"))
+        {
+            var lineNum = FindLineContaining(lines, "!!", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Null Safety",
+                Description = "The !! operator defeats Kotlin's null safety; use safe calls instead",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use safe call operator: value?.method() or elvis operator: value ?: defaultValue"
+            });
+        }
+
+        // 2. Mutable collections when immutable would work
+        if (contentLower.Contains("var ") && (contentLower.Contains("mutablelistof") || contentLower.Contains("mutablemapof")))
+        {
+            var lineNum = FindLineContaining(lines, "mutableListOf|mutableMapOf", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Immutability Best Practice",
+                Description = "Prefer immutable collections for better thread safety and predictability",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use immutable: val list = listOf(...) instead of var list = mutableListOf(...)"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectScalaViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Using null instead of Option
+        if (content.Contains("null"))
+        {
+            var lineNum = FindLineContaining(lines, "null", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Functional Programming Best Practice",
+                Description = "In Scala, use Option[T] instead of null for better type safety",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use Option: def findUser(id: Int): Option[User] instead of returning null"
+            });
+        }
+
+        // 2. Using var when val would work
+        if (contentLower.Contains("var "))
+        {
+            var lineNum = FindLineContaining(lines, "var ", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Immutability Principle",
+                Description = "Prefer val (immutable) over var (mutable) for functional programming",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Low,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use val for immutable: val count = 10 instead of var count = 10"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectGroovyViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Missing @CompileStatic for performance
+        if ((contentLower.Contains("class") || contentLower.Contains("def")) && !contentLower.Contains("@compilestatic"))
+        {
+            var lineNum = FindLineContaining(lines, "class|def", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Performance Optimization",
+                Description = "Use @CompileStatic for better performance in Groovy",
+                Type = ViolationType.Performance,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add annotation: @groovy.transform.CompileStatic class MyClass { ... }"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectClojureViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Using mutable state unnecessarily
+        if (contentLower.Contains("atom") || contentLower.Contains("ref"))
+        {
+            var lineNum = FindLineContaining(lines, "atom|ref", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Functional Programming",
+                Description = "Minimize use of mutable state; prefer pure functions and immutable data",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Low,
+                CodeSnippet = snippet,
+                SuggestedFix = "Consider using pure functions with immutable data structures when possible"
+            });
+        }
+
+        return violations;
+    }
+
+    #endregion
+
+    #region Web Languages (PHP, Ruby, Vue)
+
+    private List<Violation> DetectPHPViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. SQL Injection via string concatenation
+        if ((contentLower.Contains("select") || contentLower.Contains("insert")) && content.Contains("$"))
+        {
+            var lineNum = FindLineContaining(lines, "SELECT|INSERT|\\$", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "SQL Injection Prevention",
+                Description = "Direct variable interpolation in SQL queries is vulnerable to SQL injection",
+                Type = ViolationType.Security,
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use prepared statements: $stmt = $pdo->prepare('SELECT * FROM users WHERE id = :id'); $stmt->execute(['id' => $id]);"
+            });
+        }
+
+        // 2. Using deprecated mysql_ functions
+        if (contentLower.Contains("mysql_"))
+        {
+            var lineNum = FindLineContaining(lines, "mysql_", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Deprecated Functions",
+                Description = "mysql_ functions are deprecated; use mysqli or PDO",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use PDO: $pdo = new PDO('mysql:host=localhost;dbname=test', $user, $pass);"
+            });
+        }
+
+        // 3. Missing type declarations (PHP 7+)
+        if (contentLower.Contains("function") && !content.Contains(":"))
+        {
+            var lineNum = FindLineContaining(lines, "function", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Type Safety (PHP 7+)",
+                Description = "Use type declarations for better code safety and documentation",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Low,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add type hints: function getUser(int $id): ?User { ... }"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectRubyViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Using unless with else (confusing)
+        if (contentLower.Contains("unless") && contentLower.Contains("else"))
+        {
+            var lineNum = FindLineContaining(lines, "unless", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Code Readability",
+                Description = "'unless' with 'else' is confusing; use 'if' instead",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use if: if condition then ... else ... end"
+            });
+        }
+
+        // 2. Mixing string interpolation styles
+        if (content.Contains("#{") && content.Contains("+"))
+        {
+            var lineNum = FindLineContaining(lines, "#\\{", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Consistent String Handling",
+                Description = "Prefer string interpolation over concatenation in Ruby",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Low,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use interpolation: \"Hello #{name}\" instead of \"Hello \" + name"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectVueViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Missing key in v-for
+        if (contentLower.Contains("v-for") && !content.Contains(":key"))
+        {
+            var lineNum = FindLineContaining(lines, "v-for", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Vue.js Best Practices",
+                Description = "v-for directives should always have a unique :key binding",
+                Type = ViolationType.Performance,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "<div v-for=\"item in items\" :key=\"item.id\">{{ item.name }}</div>"
+            });
+        }
+
+        // 2. Mutating props directly
+        if (contentLower.Contains("props") && content.Contains("this.") && content.Contains("="))
+        {
+            var lineNum = FindLineContaining(lines, "this\\.", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Vue Component Communication",
+                Description = "Props should not be mutated directly; emit events to parent instead",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                SuggestedFix = "Emit event: this.$emit('update:propName', newValue); Parent handles update"
+            });
+        }
+
+        return violations;
+    }
+
+    #endregion
+
+    #region Systems Languages (Go, Rust, Swift)
+
+    private List<Violation> DetectGoViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Ignoring error returns
+        if (contentLower.Contains("err") && content.Contains("_"))
+        {
+            var lineNum = FindLineContaining(lines, "_, err|err :=", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Error Handling",
+                Description = "Never ignore error returns in Go; always handle or explicitly ignore with comment",
+                Type = ViolationType.ErrorHandling,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Handle error: if err != nil { return err } or log.Printf(\"Error: %v\", err)"
+            });
+        }
+
+        // 2. Not using defer for cleanup
+        if ((contentLower.Contains("open(") || contentLower.Contains("create(")) && !contentLower.Contains("defer"))
+        {
+            var lineNum = FindLineContaining(lines, "Open\\(|Create\\(", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Resource Management",
+                Description = "Use defer to ensure resources are properly closed",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use defer: file, err := os.Open(name); if err == nil { defer file.Close() }"
+            });
+        }
+
+        // 3. Goroutine without proper synchronization
+        if (contentLower.Contains("go ") && !contentLower.Contains("sync") && !contentLower.Contains("chan"))
+        {
+            var lineNum = FindLineContaining(lines, "go ", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Concurrency Safety",
+                Description = "Goroutines should be synchronized with channels or sync primitives",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use WaitGroup: var wg sync.WaitGroup; wg.Add(1); go func() { defer wg.Done(); ... }(); wg.Wait()"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectRustViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Using unwrap() instead of proper error handling
+        if (contentLower.Contains(".unwrap()"))
+        {
+            var lineNum = FindLineContaining(lines, "\\.unwrap\\(\\)", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Error Handling",
+                Description = "unwrap() can panic; use proper error handling with ? operator or match",
+                Type = ViolationType.ErrorHandling,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use ? operator: let value = result?; or match: match result { Ok(v) => v, Err(e) => handle_error(e) }"
+            });
+        }
+
+        // 2. Clone() when borrow would work
+        if (contentLower.Contains(".clone()"))
+        {
+            var lineNum = FindLineContaining(lines, "\\.clone\\(\\)", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Performance - Ownership",
+                Description = "Unnecessary cloning impacts performance; consider borrowing instead",
+                Type = ViolationType.Performance,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use borrowing: fn process(data: &Vec<String>) instead of fn process(data: Vec<String>)"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectSwiftViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Force unwrapping optionals
+        if (content.Contains("!") && !contentLower.Contains("guard") && !contentLower.Contains("if let"))
+        {
+            var lineNum = FindLineContaining(lines, "!", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Optional Safety",
+                Description = "Force unwrapping with ! can crash; use optional binding or optional chaining",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use optional binding: if let value = optional { use value } or guard let value = optional else { return }"
+            });
+        }
+
+        // 2. Strong reference cycle risk
+        if (contentLower.Contains("[self") && !contentLower.Contains("weak") && !contentLower.Contains("unowned"))
+        {
+            var lineNum = FindLineContaining(lines, "\\[self", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Memory Management",
+                Description = "Capturing self in closures can create retain cycles",
+                Type = ViolationType.Performance,
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use weak self: { [weak self] in guard let self = self else { return }; self.method() }"
+            });
+        }
+
+        return violations;
+    }
+
+    #endregion
+
+    #region Functional Languages (F#, Haskell, Elixir, Erlang)
+
+    private List<Violation> DetectFSharpViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Using mutable when immutable would work
+        if (contentLower.Contains("mutable"))
+        {
+            var lineNum = FindLineContaining(lines, "mutable", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Functional Programming",
+                Description = "Prefer immutable values in F# for better composition and reasoning",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use immutable: let value = 10 instead of let mutable value = 10"
+            });
+        }
+
+        // 2. Not using pattern matching
+        if (contentLower.Contains("if") && contentLower.Contains("then") && !contentLower.Contains("match"))
+        {
+            var lineNum = FindLineContaining(lines, "if.*then", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Pattern Matching",
+                Description = "Consider using pattern matching instead of if-then-else for exhaustiveness",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Low,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use match: match value with | Some x -> ... | None -> ..."
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectHaskellViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Partial functions without handling
+        if (contentLower.Contains("head") || contentLower.Contains("tail") || contentLower.Contains("init"))
+        {
+            var lineNum = FindLineContaining(lines, "head|tail|init", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Total Functions",
+                Description = "Avoid partial functions that can fail on empty lists; use safe alternatives",
+                Type = ViolationType.ErrorHandling,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use safe functions: listToMaybe, headMay from safe package, or pattern match on list"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectElixirViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Not using pattern matching in function heads
+        if (contentLower.Contains("def") && contentLower.Contains("if") && !content.Contains("when"))
+        {
+            var lineNum = FindLineContaining(lines, "def.*if", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Pattern Matching",
+                Description = "Use pattern matching in function heads instead of if inside function body",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use multiple function heads: def process([]), do: ... and def process([head | tail]), do: ..."
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectErlangViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Not handling all message types in receive
+        if (contentLower.Contains("receive") && !content.Contains("after") && !content.Contains("_"))
+        {
+            var lineNum = FindLineContaining(lines, "receive", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Message Handling",
+                Description = "receive blocks should handle all message types or use catch-all pattern",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add catch-all: receive {expected, Data} -> handle(Data); _ -> ok end."
+            });
+        }
+
+        return violations;
+    }
+
+    #endregion
+
+    #region Mobile (Dart)
+
+    private List<Violation> DetectDartViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Not using const constructors
+        if (contentLower.Contains("statelesswidget") && !contentLower.Contains("const "))
+        {
+            var lineNum = FindLineContaining(lines, "StatelessWidget", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Flutter Performance",
+                Description = "Use const constructors for stateless widgets to improve performance",
+                Type = ViolationType.Performance,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add const: return const MyWidget(); This prevents unnecessary rebuilds"
+            });
+        }
+
+        // 2. Missing null safety
+        if (contentLower.Contains("?") && !content.Contains("!") && content.Contains("?."))
+        {
+            var lineNum = FindLineContaining(lines, "\\?\\.", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Null Safety (Dart 2.12+)",
+                Description = "Leverage Dart's null safety features for better type safety",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Low,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use null-aware operators: value?.method() or value ?? defaultValue"
+            });
+        }
+
+        return violations;
+    }
+
+    #endregion
+
+    #region Scripting Languages (Shell, PowerShell, Lua, Perl)
+
+    private List<Violation> DetectShellViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Unquoted variables
+        if (content.Contains("$") && !content.Contains("\"$"))
+        {
+            var lineNum = FindLineContaining(lines, "\\$[A-Za-z]", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Shell Best Practices",
+                Description = "Always quote variables to prevent word splitting and globbing",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Quote variables: \"$variable\" instead of $variable"
+            });
+        }
+
+        // 2. Not checking command exit status
+        if (!contentLower.Contains("if") && !content.Contains("||") && !content.Contains("&&"))
+        {
+            var lineNum = random.Next(1, Math.Max(2, lines.Length));
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Error Handling",
+                Description = "Check command exit status to handle failures properly",
+                Type = ViolationType.ErrorHandling,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Check status: if ! command; then echo \"Failed\"; exit 1; fi or use set -e"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectPowerShellViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Using aliases in scripts
+        if (contentLower.Contains("ls") || contentLower.Contains("cd") || contentLower.Contains("rm"))
+        {
+            var lineNum = FindLineContaining(lines, "^ls |^cd |^rm ", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "PowerShell Best Practices",
+                Description = "Use full cmdlet names instead of aliases in scripts for clarity",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Low,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use full names: Get-ChildItem instead of ls, Set-Location instead of cd, Remove-Item instead of rm"
+            });
+        }
+
+        // 2. Missing error handling
+        if (!contentLower.Contains("try") && !contentLower.Contains("$?") && !contentLower.Contains("erroraction"))
+        {
+            var lineNum = random.Next(1, Math.Max(2, lines.Length));
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Error Handling",
+                Description = "PowerShell scripts should handle errors with Try-Catch or -ErrorAction",
+                Type = ViolationType.ErrorHandling,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use Try-Catch: try { command } catch { Write-Error $_.Exception.Message } or -ErrorAction Stop"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectLuaViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Global variables without local
+        if (!contentLower.Contains("local") && contentLower.Contains("="))
+        {
+            var lineNum = FindLineContaining(lines, "=", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Variable Scope",
+                Description = "Prefer local variables over global for better encapsulation",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use local: local myVar = 10 instead of myVar = 10"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectPerlViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Not using strict and warnings
+        if (!contentLower.Contains("use strict") || !contentLower.Contains("use warnings"))
+        {
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, 1);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Perl Best Practices",
+                Description = "Always use strict and warnings pragmas for better error detection",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add at top of file: use strict; use warnings;"
+            });
+        }
+
+        return violations;
+    }
+
+    #endregion
+
+    #region Data Science (R, Julia)
+
+    private List<Violation> DetectRViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Using = instead of <-
+        if (content.Contains(" = ") && !content.Contains("<-"))
+        {
+            var lineNum = FindLineContaining(lines, " = ", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "R Style Guide",
+                Description = "Use <- for assignment instead of = for better R idioms",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Low,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use assignment operator: x <- 10 instead of x = 10"
+            });
+        }
+
+        // 2. Not vectorizing operations
+        if (contentLower.Contains("for") && contentLower.Contains("[i]"))
+        {
+            var lineNum = FindLineContaining(lines, "for.*\\[i\\]", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "R Performance",
+                Description = "Vectorize operations instead of using loops for better performance",
+                Type = ViolationType.Performance,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use vectorized operations: result <- vector1 + vector2 instead of for loops"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectJuliaViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Type instability
+        if (contentLower.Contains("function") && !content.Contains("::"))
+        {
+            var lineNum = FindLineContaining(lines, "function", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Julia Performance",
+                Description = "Add type annotations for better performance in Julia",
+                Type = ViolationType.Performance,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add types: function process(x::Float64, y::Int)::Float64 ... end"
+            });
+        }
+
+        return violations;
+    }
+
+    #endregion
+
+    #region .NET (VB.NET)
+
+    private List<Violation> DetectVBNetViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Not using Option Strict
+        if (!contentLower.Contains("option strict on"))
+        {
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, 1);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "VB.NET Best Practices",
+                Description = "Enable Option Strict On for type safety and better error detection",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add at top of file: Option Strict On"
+            });
+        }
+
+        // 2. Using On Error instead of Try-Catch
+        if (contentLower.Contains("on error"))
+        {
+            var lineNum = FindLineContaining(lines, "On Error", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Modern Error Handling",
+                Description = "Use Try-Catch instead of On Error for structured exception handling",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use Try-Catch: Try ... Catch ex As Exception ... End Try"
+            });
+        }
+
+        return violations;
+    }
+
+    #endregion
+
+    #region Blockchain (Solidity)
+
+    private List<Violation> DetectSolidityViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Missing access modifiers
+        if (contentLower.Contains("function") && !contentLower.Contains("public") && !contentLower.Contains("private")
+            && !contentLower.Contains("internal") && !contentLower.Contains("external"))
+        {
+            var lineNum = FindLineContaining(lines, "function", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Solidity Security",
+                Description = "Always specify function visibility (public/private/internal/external)",
+                Type = ViolationType.Security,
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add visibility: function myFunction() public { ... } or external/private/internal"
+            });
+        }
+
+        // 2. Reentrancy risk
+        if (contentLower.Contains("call{value:") || contentLower.Contains("call.value"))
+        {
+            var lineNum = FindLineContaining(lines, "call\\{value:|call\\.value", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Reentrancy Prevention",
+                Description = "External calls can enable reentrancy attacks; update state before calling",
+                Type = ViolationType.Security,
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                SuggestedFix = "Follow Checks-Effects-Interactions pattern: update state BEFORE external calls, or use ReentrancyGuard"
+            });
+        }
+
+        // 3. Using tx.origin for authorization
+        if (contentLower.Contains("tx.origin"))
+        {
+            var lineNum = FindLineContaining(lines, "tx\\.origin", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "Authorization Security",
+                Description = "Never use tx.origin for authorization; use msg.sender instead",
+                Type = ViolationType.Security,
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                SuggestedFix = "Use msg.sender: require(msg.sender == owner, \"Not authorized\");"
+            });
+        }
+
+        return violations;
+    }
+
+    #endregion
+
+    #region Markup Languages (XML, YAML)
+
+    private List<Violation> DetectXMLViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Missing XML declaration
+        if (!content.StartsWith("<?xml"))
+        {
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, 1);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "XML Best Practices",
+                Description = "XML files should start with proper XML declaration",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Low,
+                CodeSnippet = snippet,
+                SuggestedFix = "Add XML declaration: <?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            });
+        }
+
+        return violations;
+    }
+
+    private List<Violation> DetectYAMLViolations(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var violations = new List<Violation>();
+
+        // 1. Using tabs instead of spaces
+        if (content.Contains("\t"))
+        {
+            var lineNum = FindLineContaining(lines, "\t", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            violations.Add(new Violation
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                RuleName = "YAML Syntax",
+                Description = "YAML requires spaces for indentation, not tabs",
+                Type = ViolationType.BestPractice,
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                SuggestedFix = "Replace tabs with spaces (typically 2 or 4 spaces per indentation level)"
+            });
+        }
+
+        return violations;
+    }
+
+    #endregion
+
+    /// <summary>
+    /// Helper method to find line containing a pattern (supports regex)
+    /// </summary>
+    private int FindLineContaining(string[] lines, string pattern, Random random)
+    {
+        var matchingLines = new List<int>();
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (System.Text.RegularExpressions.Regex.IsMatch(lines[i], pattern,
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            {
+                matchingLines.Add(i + 1);
+            }
+        }
+
+        return matchingLines.Any() ? matchingLines[random.Next(matchingLines.Count)] : random.Next(1, Math.Max(2, lines.Length));
+    }
+
+    #endregion
+
     private List<Bug> GenerateMockBugs(List<CodeFile> files)
     {
         var bugs = new List<Bug>();
         var random = new Random(42);
 
-        // Analyze each file for potential bugs
+        // Analyze each file for potential bugs with language-specific detection
         foreach (var file in files.Where(f => f.FileType != FileType.Markdown && f.Content.Length > 50))
         {
-            var fileContent = file.Content.ToLower();
-            var lines = file.Content.Split('\n');
+            var extension = Path.GetExtension(file.FilePath).ToLowerInvariant();
+            var fileContent = file.Content;
+            var fileContentLower = fileContent.ToLower();
+            var lines = fileContent.Split('\n');
 
-            // Null reference potential
-            if (fileContent.Contains(".") && !fileContent.Contains("?.") &&
-                (fileContent.Contains("var ") || fileContent.Contains("return ")))
+            // Language-specific bug detection - Supporting 25+ programming languages
+            bugs.AddRange(extension switch
             {
-                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
-                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
-                bugs.Add(new Bug
-                {
-                    FilePath = file.FilePath,
-                    LineNumber = startLine,
-                    EndLineNumber = endLine,
-                    Title = "Potential Null Reference Exception",
-                    Description = "Object may be null when accessed without null checking",
-                    RootCause = "Missing null check before accessing object property or method",
-                    Impact = "Application may crash with NullReferenceException at runtime, causing service interruption",
-                    Severity = SeverityLevel.High,
-                    CodeSnippet = snippet,
-                    ReproductionSteps = new List<string>
-                    {
-                        "Call the method with a null object",
-                        "Access the property or method without null check",
-                        "NullReferenceException is thrown"
-                    },
-                    SuggestedFix = "Use null-conditional operator (?.) or add explicit null checks"
-                });
-            }
+                // C-family languages
+                ".cs" => DetectCSharpBugs(file, fileContent, fileContentLower, lines, random),
+                ".c" or ".h" => DetectCBugs(file, fileContent, fileContentLower, lines, random),
+                ".cpp" or ".hpp" or ".cc" or ".cxx" or ".h++" => DetectCppBugs(file, fileContent, fileContentLower, lines, random),
+                ".m" or ".mm" => DetectObjectiveCBugs(file, fileContent, fileContentLower, lines, random),
 
-            // Unhandled async exceptions
-            if (fileContent.Contains("async") && fileContent.Contains("await") &&
-                !fileContent.Contains("try") && !fileContent.Contains("catch"))
-            {
-                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
-                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
-                bugs.Add(new Bug
-                {
-                    FilePath = file.FilePath,
-                    LineNumber = startLine,
-                    EndLineNumber = endLine,
-                    Title = "Unhandled Async Exception",
-                    Description = "Asynchronous operation lacks proper exception handling",
-                    RootCause = "Async method does not handle potential exceptions from awaited operations",
-                    Impact = "Unhandled exceptions can crash the application or leave it in an inconsistent state",
-                    Severity = SeverityLevel.Critical,
-                    CodeSnippet = snippet,
-                    ReproductionSteps = new List<string>
-                    {
-                        "Trigger the async operation",
-                        "Cause an exception in the awaited task",
-                        "Exception propagates without handling"
-                    },
-                    SuggestedFix = "Wrap async operations in try-catch blocks or use global exception handlers"
-                });
-            }
+                // JVM languages
+                ".java" => DetectJavaBugs(file, fileContent, fileContentLower, lines, random),
+                ".kt" or ".kts" => DetectKotlinBugs(file, fileContent, fileContentLower, lines, random),
+                ".scala" => DetectScalaBugs(file, fileContent, fileContentLower, lines, random),
+                ".groovy" => DetectGroovyBugs(file, fileContent, fileContentLower, lines, random),
 
-            // Resource disposal issues
-            if ((fileContent.Contains("new stream") || fileContent.Contains("new file") ||
-                 fileContent.Contains("httpclient")) && !fileContent.Contains("using") && !fileContent.Contains("dispose"))
-            {
-                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
-                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
-                bugs.Add(new Bug
-                {
-                    FilePath = file.FilePath,
-                    LineNumber = startLine,
-                    EndLineNumber = endLine,
-                    Title = "Resource Leak - Missing Disposal",
-                    Description = "Unmanaged resources are not properly disposed",
-                    RootCause = "IDisposable objects created without using statement or explicit disposal",
-                    Impact = "Memory leaks and resource exhaustion over time, degraded performance",
-                    Severity = SeverityLevel.High,
-                    CodeSnippet = snippet,
-                    ReproductionSteps = new List<string>
-                    {
-                        "Create resource without using statement",
-                        "Run application over extended period",
-                        "Observe memory/resource leaks"
-                    },
-                    SuggestedFix = "Use 'using' statement or implement IDisposable pattern"
-                });
-            }
+                // JavaScript/TypeScript ecosystem
+                ".js" or ".mjs" or ".cjs" => DetectJavaScriptBugs(file, fileContent, fileContentLower, lines, random),
+                ".ts" or ".tsx" or ".mts" or ".cts" => DetectTypeScriptBugs(file, fileContent, fileContentLower, lines, random),
+                ".jsx" => DetectReactBugs(file, fileContent, fileContentLower, lines, random),
+                ".vue" => DetectVueBugs(file, fileContent, fileContentLower, lines, random),
 
-            // SQL Injection vulnerability
-            if (fileContent.Contains("select") && fileContent.Contains("+") &&
-                (fileContent.Contains("execute") || fileContent.Contains("query")))
-            {
-                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
-                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
-                bugs.Add(new Bug
-                {
-                    FilePath = file.FilePath,
-                    LineNumber = startLine,
-                    EndLineNumber = endLine,
-                    Title = "SQL Injection Vulnerability",
-                    Description = "Dynamic SQL construction using string concatenation",
-                    RootCause = "User input concatenated directly into SQL queries without parameterization",
-                    Impact = "Critical security vulnerability - attackers can execute arbitrary SQL commands",
-                    Severity = SeverityLevel.Critical,
-                    CodeSnippet = snippet,
-                    ReproductionSteps = new List<string>
-                    {
-                        "Input malicious SQL in user-provided data",
-                        "SQL gets executed with injected code",
-                        "Unauthorized data access or modification"
-                    },
-                    SuggestedFix = "Use parameterized queries or ORM (Entity Framework)"
-                });
-            }
+                // Python
+                ".py" or ".pyw" or ".pyi" => DetectPythonBugs(file, fileContent, fileContentLower, lines, random),
 
-            // Thread safety issues
-            if (fileContent.Contains("static") && fileContent.Contains("list<") &&
-                !fileContent.Contains("readonly") && !fileContent.Contains("concurrent"))
-            {
-                var lineNum = random.Next(1, Math.Max(2, file.LineCount));
-                var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
-                bugs.Add(new Bug
-                {
-                    FilePath = file.FilePath,
-                    LineNumber = startLine,
-                    EndLineNumber = endLine,
-                    Title = "Thread Safety Issue - Shared Mutable State",
-                    Description = "Static mutable collection accessed without synchronization",
-                    RootCause = "Non-thread-safe collection used in multi-threaded context",
-                    Impact = "Race conditions, data corruption, unpredictable behavior in concurrent scenarios",
-                    Severity = SeverityLevel.High,
-                    CodeSnippet = snippet,
-                    ReproductionSteps = new List<string>
-                    {
-                        "Access static collection from multiple threads",
-                        "Perform concurrent read/write operations",
-                        "Experience data corruption or exceptions"
-                    },
-                    SuggestedFix = "Use ConcurrentDictionary/ConcurrentBag or add proper locking"
-                });
-            }
+                // Web languages
+                ".php" => DetectPHPBugs(file, fileContent, fileContentLower, lines, random),
+                ".rb" or ".rake" => DetectRubyBugs(file, fileContent, fileContentLower, lines, random),
+
+                // Systems languages
+                ".go" => DetectGoBugs(file, fileContent, fileContentLower, lines, random),
+                ".rs" => DetectRustBugs(file, fileContent, fileContentLower, lines, random),
+                ".swift" => DetectSwiftBugs(file, fileContent, fileContentLower, lines, random),
+
+                // Functional languages
+                ".fs" or ".fsx" or ".fsi" => DetectFSharpBugs(file, fileContent, fileContentLower, lines, random),
+                ".hs" or ".lhs" => DetectHaskellBugs(file, fileContent, fileContentLower, lines, random),
+                ".ex" or ".exs" => DetectElixirBugs(file, fileContent, fileContentLower, lines, random),
+
+                // Mobile
+                ".dart" => DetectDartBugs(file, fileContent, fileContentLower, lines, random),
+
+                // Scripting languages
+                ".sh" or ".bash" or ".zsh" => DetectShellBugs(file, fileContent, fileContentLower, lines, random),
+                ".ps1" or ".psm1" or ".psd1" => DetectPowerShellBugs(file, fileContent, fileContentLower, lines, random),
+                ".lua" => DetectLuaBugs(file, fileContent, fileContentLower, lines, random),
+
+                // Database
+                ".sql" => DetectSQLBugs(file, fileContent, fileContentLower, lines, random),
+
+                // .NET
+                ".vb" => DetectVBNetBugs(file, fileContent, fileContentLower, lines, random),
+
+                // Blockchain
+                ".sol" => DetectSolidityBugs(file, fileContent, fileContentLower, lines, random),
+
+                _ => new List<Bug>()
+            });
         }
 
         // Add some general bugs if none were found
@@ -1544,6 +3528,1639 @@ duplicatedCode, locations (array with filePath, startLine, endLine, methodName, 
 
         return bugs;
     }
+
+    #region Language-Specific Bug Detection
+
+    private List<Bug> DetectCSharpBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Null reference potential
+        if (content.Contains(".") && !contentLower.Contains("?.") &&
+            (contentLower.Contains("var ") || contentLower.Contains("return ")))
+        {
+            var lineNum = FindLineContaining(lines, "\\.", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Potential Null Reference Exception",
+                Description = "Object may be null when accessed without null checking",
+                RootCause = "Missing null check before accessing object property or method",
+                Impact = "Application may crash with NullReferenceException at runtime, causing service interruption",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Call the method with a null object",
+                    "Access the property or method without null check",
+                    "NullReferenceException is thrown"
+                },
+                SuggestedFix = "Use null-conditional operator (?.) or add explicit null checks: if (obj != null) { obj.Method(); } or obj?.Method()"
+            });
+        }
+
+        // 2. Unhandled async exceptions
+        if (contentLower.Contains("async") && contentLower.Contains("await") &&
+            !contentLower.Contains("try") && !contentLower.Contains("catch"))
+        {
+            var lineNum = FindLineContaining(lines, "await ", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Unhandled Async Exception",
+                Description = "Asynchronous operation lacks proper exception handling",
+                RootCause = "Async method does not handle potential exceptions from awaited operations",
+                Impact = "Unhandled exceptions can crash the application or leave it in an inconsistent state",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Trigger the async operation",
+                    "Cause an exception in the awaited task",
+                    "Exception propagates without handling"
+                },
+                SuggestedFix = "Wrap async operations in try-catch: try { await operation(); } catch (Exception ex) { _logger.LogError(ex, \"Error\"); }"
+            });
+        }
+
+        // 3. Resource disposal issues
+        if ((contentLower.Contains("new stream") || contentLower.Contains("new file") ||
+             contentLower.Contains("httpclient") || contentLower.Contains("new sqlconnection")) &&
+            !contentLower.Contains("using") && !contentLower.Contains("dispose"))
+        {
+            var lineNum = FindLineContaining(lines, "new Stream|new File|HttpClient|new SqlConnection", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Resource Leak - Missing Disposal",
+                Description = "Unmanaged resources are not properly disposed",
+                RootCause = "IDisposable objects created without using statement or explicit disposal",
+                Impact = "Memory leaks and resource exhaustion over time, degraded performance",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Create resource without using statement",
+                    "Run application over extended period",
+                    "Observe memory/resource leaks"
+                },
+                SuggestedFix = "Use 'using' statement: using (var resource = new Resource()) { ... } or using var resource = new Resource();"
+            });
+        }
+
+        // 4. Thread safety issues
+        if (contentLower.Contains("static") && contentLower.Contains("list<") &&
+            !contentLower.Contains("readonly") && !contentLower.Contains("concurrent"))
+        {
+            var lineNum = FindLineContaining(lines, "static.*List<", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Thread Safety Issue - Shared Mutable State",
+                Description = "Static mutable collection accessed without synchronization",
+                RootCause = "Non-thread-safe collection used in multi-threaded context",
+                Impact = "Race conditions, data corruption, unpredictable behavior in concurrent scenarios",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Access static collection from multiple threads",
+                    "Perform concurrent read/write operations",
+                    "Experience data corruption or exceptions"
+                },
+                SuggestedFix = "Use ConcurrentDictionary/ConcurrentBag or add proper locking: lock(_syncObject) { ... }"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectSQLBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. SQL Injection vulnerability
+        if (contentLower.Contains("select") && content.Contains("+") &&
+            (contentLower.Contains("execute") || contentLower.Contains("exec ")))
+        {
+            var lineNum = FindLineContaining(lines, "EXEC|EXECUTE", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "SQL Injection Vulnerability",
+                Description = "Dynamic SQL construction using string concatenation",
+                RootCause = "User input concatenated directly into SQL queries without parameterization",
+                Impact = "Critical security vulnerability - attackers can execute arbitrary SQL commands, access/modify unauthorized data",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Input malicious SQL in user-provided data (e.g., '; DROP TABLE Users--)",
+                    "SQL gets executed with injected code",
+                    "Unauthorized data access or modification occurs"
+                },
+                SuggestedFix = "Use sp_executesql with parameters: EXEC sp_executesql N'SELECT * FROM Users WHERE Id = @Id', N'@Id INT', @Id = @UserId"
+            });
+        }
+
+        // 2. Missing transaction for data integrity
+        if ((contentLower.Contains("insert") || contentLower.Contains("update") || contentLower.Contains("delete")) &&
+            !contentLower.Contains("begin transaction") && !contentLower.Contains("begin tran"))
+        {
+            var lineNum = FindLineContaining(lines, "INSERT|UPDATE|DELETE", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Data Integrity Risk - Missing Transaction",
+                Description = "DML operations without explicit transaction management",
+                RootCause = "Multiple data modifications not wrapped in transaction",
+                Impact = "Partial updates may occur on failure, leaving database in inconsistent state",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Execute procedure with multiple DML statements",
+                    "Trigger error after first DML completes",
+                    "Observe partial data changes"
+                },
+                SuggestedFix = "Wrap in transaction: BEGIN TRANSACTION; ... IF @@ERROR = 0 COMMIT TRANSACTION ELSE ROLLBACK TRANSACTION"
+            });
+        }
+
+        // 3. Cursor usage (performance issue)
+        if (contentLower.Contains("declare") && contentLower.Contains("cursor"))
+        {
+            var lineNum = FindLineContaining(lines, "CURSOR", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Performance Issue - Cursor Usage",
+                Description = "Cursor-based row-by-row processing is significantly slower than set-based operations",
+                RootCause = "Using cursor instead of set-based SQL operations",
+                Impact = "Severe performance degradation, especially with large datasets; increased server resource consumption",
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Execute cursor-based procedure with large dataset",
+                    "Observe slow execution time and high CPU usage",
+                    "Compare with set-based equivalent"
+                },
+                SuggestedFix = "Replace cursor with set-based operation: UPDATE table SET column = value WHERE condition (processes all rows at once)"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectJavaScriptBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Unhandled promise rejection
+        if (contentLower.Contains(".then(") && !contentLower.Contains(".catch("))
+        {
+            var lineNum = FindLineContaining(lines, "\\.then\\(", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Unhandled Promise Rejection",
+                Description = "Promise chain lacks error handling, leading to silent failures",
+                RootCause = "Missing .catch() handler on promise chain",
+                Impact = "Errors go unnoticed, making debugging difficult and potentially causing application instability",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Trigger promise that rejects",
+                    "Observe error is swallowed without logging",
+                    "Application continues in unknown state"
+                },
+                SuggestedFix = "Add .catch() handler: promise.then(result => {...}).catch(error => { console.error('Error:', error); handleError(error); })"
+            });
+        }
+
+        // 2. Callback hell / Pyramid of doom
+        if (contentLower.Split("function(").Length > 4)
+        {
+            var lineNum = random.Next(1, Math.Max(2, lines.Length));
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Callback Hell - Code Readability Issue",
+                Description = "Deeply nested callbacks make code hard to read and maintain",
+                RootCause = "Excessive nesting of callback functions",
+                Impact = "Reduced code maintainability, increased likelihood of bugs, difficult error handling",
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Try to add new functionality to nested callbacks",
+                    "Experience difficulty understanding control flow",
+                    "Errors become hard to track"
+                },
+                SuggestedFix = "Refactor to async/await: async function doWork() { const result1 = await operation1(); const result2 = await operation2(result1); }"
+            });
+        }
+
+        // 3. == instead of === causing type coercion bugs
+        if (content.Contains("==") && !content.Contains("==="))
+        {
+            var lineNum = FindLineContaining(lines, " == ", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Type Coercion Bug - Loose Equality",
+                Description = "Using == allows type coercion, leading to unexpected comparison results",
+                RootCause = "Loose equality (==) instead of strict equality (===)",
+                Impact = "Subtle bugs from type coercion: 0 == '0' is true, 0 == [] is true, null == undefined is true",
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Compare values of different types using ==",
+                    "Observe unexpected true results",
+                    "Logic errors occur in conditional statements"
+                },
+                SuggestedFix = "Use strict equality: if (value === expected) instead of if (value == expected)"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectTypeScriptBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // Include JavaScript bugs
+        bugs.AddRange(DetectJavaScriptBugs(file, content, contentLower, lines, random));
+
+        // TypeScript-specific: any type usage
+        if (contentLower.Contains(": any"))
+        {
+            var lineNum = FindLineContaining(lines, ": any", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Type Safety Compromise - 'any' Type Usage",
+                Description = "Using 'any' type disables TypeScript's type checking, allowing runtime errors",
+                RootCause = "Explicitly typing variable as 'any' to bypass type system",
+                Impact = "Loss of type safety benefits, potential runtime errors that TypeScript could have caught",
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Variable typed as 'any' receives unexpected type",
+                    "Code compiles without errors",
+                    "Runtime error occurs due to type mismatch"
+                },
+                SuggestedFix = "Use specific type or 'unknown': const value: SpecificType = ... or const value: unknown = ... (requires type checking before use)"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectReactBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Direct state mutation
+        if (contentLower.Contains("this.state.") && content.Contains("=") && !contentLower.Contains("setstate"))
+        {
+            var lineNum = FindLineContaining(lines, "this\\.state\\.", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "React State Mutation Bug",
+                Description = "Directly mutating state object instead of using setState",
+                RootCause = "Assignment to this.state property without setState() call",
+                Impact = "Component doesn't re-render, UI doesn't update, state changes are lost, unpredictable behavior",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Directly modify this.state.property",
+                    "Observe UI does not update",
+                    "State is in inconsistent state"
+                },
+                SuggestedFix = "Use setState: this.setState({ property: newValue }) or with useState: setValue(newValue)"
+            });
+        }
+
+        // 2. Missing dependencies in useEffect
+        if (contentLower.Contains("useeffect") && content.Contains("[]"))
+        {
+            var lineNum = FindLineContaining(lines, "useEffect", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "React Hooks - Missing Dependencies",
+                Description = "useEffect with empty dependency array may miss required dependencies",
+                RootCause = "useEffect depends on props/state but doesn't list them in dependency array",
+                Impact = "Effect doesn't run when dependencies change, stale closure bugs, incorrect behavior",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "useEffect uses prop/state variable",
+                    "Variable changes but effect doesn't re-run",
+                    "Component uses stale data"
+                },
+                SuggestedFix = "Add all dependencies: useEffect(() => { ... }, [dependency1, dependency2]) or use ESLint plugin to auto-detect"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectPythonBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Mutable default argument
+        if (contentLower.Contains("def ") && (content.Contains("=[]") || content.Contains("={}")))
+        {
+            var lineNum = FindLineContaining(lines, "def.*=\\[\\]|def.*=\\{\\}", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Mutable Default Argument Bug",
+                Description = "Mutable default arguments are shared across all function calls, causing unexpected behavior",
+                RootCause = "Using list or dict as default parameter value",
+                Impact = "Data persists between function calls, leading to data corruption and hard-to-debug issues",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Call function multiple times without providing argument",
+                    "Observe data from previous calls persisting",
+                    "Unexpected shared state causes bugs"
+                },
+                SuggestedFix = "Use None as default: def func(items=None): items = items if items is not None else []"
+            });
+        }
+
+        // 2. Bare except clause
+        if (contentLower.Contains("except:"))
+        {
+            var lineNum = FindLineContaining(lines, "except:", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Overly Broad Exception Handling",
+                Description = "Bare except clause catches all exceptions including system exits",
+                RootCause = "Using except: without specifying exception type",
+                Impact = "Catches KeyboardInterrupt and SystemExit, making program difficult to stop, hides real errors",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Try to interrupt program with Ctrl+C",
+                    "Bare except catches KeyboardInterrupt",
+                    "Program cannot be stopped normally"
+                },
+                SuggestedFix = "Catch specific exceptions: except ValueError: or except Exception as e: (doesn't catch system exits)"
+            });
+        }
+
+        // 3. Missing file close / No context manager
+        if (contentLower.Contains("open(") && !contentLower.Contains("with open"))
+        {
+            var lineNum = FindLineContaining(lines, "open\\(", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Resource Leak - File Not Closed",
+                Description = "File opened without context manager may not be properly closed",
+                RootCause = "Using open() without 'with' statement",
+                Impact = "File handles leak, reaching system limits, data may not be flushed, file locks persist",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Open many files without closing",
+                    "Reach system file descriptor limit",
+                    "Application fails with 'Too many open files' error"
+                },
+                SuggestedFix = "Use context manager: with open('file.txt', 'r') as f: data = f.read() (automatically closes file)"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectJavaBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Potential NullPointerException
+        if (content.Contains(".") && !content.Contains("!= null") && !content.Contains("Optional"))
+        {
+            var lineNum = FindLineContaining(lines, "\\.", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Potential NullPointerException",
+                Description = "Object may be null when dereferenced",
+                RootCause = "Missing null check before accessing object members",
+                Impact = "NullPointerException at runtime causes application crash or service disruption",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Pass null object to method",
+                    "Attempt to access object property or method",
+                    "NullPointerException is thrown"
+                },
+                SuggestedFix = "Add null check: if (object != null) { object.method(); } or use Optional<T>: optional.ifPresent(obj -> obj.method())"
+            });
+        }
+
+        // 2. Resource not closed (missing try-with-resources)
+        if ((contentLower.Contains("new fileinputstream") || contentLower.Contains("new bufferedreader") ||
+             contentLower.Contains("new connection")) && !contentLower.Contains("try ("))
+        {
+            var lineNum = FindLineContaining(lines, "new File|new Buffered|new Connection", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Resource Leak - Missing try-with-resources",
+                Description = "AutoCloseable resource not properly closed, causing resource leak",
+                RootCause = "Resource created without try-with-resources statement",
+                Impact = "File handles, database connections, or network sockets leak, eventually exhausting system resources",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Create resource without try-with-resources",
+                    "Exception occurs before manual close",
+                    "Resource remains open, leaking memory/handles"
+                },
+                SuggestedFix = "Use try-with-resources: try (BufferedReader reader = new BufferedReader(new FileReader(file))) { ... } (auto-closes)"
+            });
+        }
+
+        // 3. String comparison with ==
+        if (content.Contains("==") && contentLower.Contains("string"))
+        {
+            var lineNum = FindLineContaining(lines, "==.*String|String.*==", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "String Comparison Bug - Using == Instead of equals()",
+                Description = "Comparing string references with == instead of content with equals()",
+                RootCause = "Using == operator for string comparison instead of .equals() method",
+                Impact = "Comparison checks reference equality, not value equality; may work in some cases but fail in others",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Compare two strings with same content but different references",
+                    "== returns false even though content is identical",
+                    "Logic error in conditional statements"
+                },
+                SuggestedFix = "Use .equals() method: if (str1.equals(str2)) or Objects.equals(str1, str2) for null safety"
+            });
+        }
+
+        return bugs;
+    }
+
+    // ==================== BUG DETECTION FOR ADDITIONAL LANGUAGES ====================
+
+    #region C/C++ and Objective-C Bugs
+
+    private List<Bug> DetectCBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Null pointer dereference
+        if (contentLower.Contains("malloc(") && content.Contains("->"))
+        {
+            var lineNum = FindLineContaining(lines, "->", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Null Pointer Dereference",
+                Description = "Dereferencing pointer without checking for NULL",
+                RootCause = "malloc() can return NULL on failure, but pointer is used without validation",
+                Impact = "Segmentation fault and program crash",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Allocate memory with malloc()",
+                    "Allocation fails, returns NULL",
+                    "Dereference NULL pointer -> segfault"
+                },
+                SuggestedFix = "Check for NULL: ptr = malloc(size); if (ptr == NULL) { handle_error(); return; }"
+            });
+        }
+
+        // 2. Buffer overflow
+        if (contentLower.Contains("strcpy") || contentLower.Contains("gets"))
+        {
+            var lineNum = FindLineContaining(lines, "strcpy|gets", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Buffer Overflow Vulnerability",
+                Description = "Unsafe string copy function can cause buffer overflow",
+                RootCause = "Using strcpy() or gets() without size checks",
+                Impact = "Memory corruption, arbitrary code execution, security vulnerability",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Input string larger than destination buffer",
+                    "strcpy/gets copies without size check",
+                    "Buffer overflows, corrupting adjacent memory"
+                },
+                SuggestedFix = "Use safe alternatives: strncpy(dest, src, sizeof(dest)-1); dest[sizeof(dest)-1] = '\\0';"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectCppBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // Include C bugs
+        bugs.AddRange(DetectCBugs(file, content, contentLower, lines, random));
+
+        // 1. Use after delete
+        if (contentLower.Contains("delete ") && !contentLower.Contains("= nullptr"))
+        {
+            var lineNum = FindLineContaining(lines, "delete ", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Use After Delete - Dangling Pointer",
+                Description = "Pointer not set to nullptr after delete, risking use-after-delete bugs",
+                RootCause = "Deleted pointer remains with old address value",
+                Impact = "Undefined behavior, memory corruption, crash",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Delete pointer: delete ptr;",
+                    "Reuse pointer accidentally",
+                    "Access freed memory -> undefined behavior"
+                },
+                SuggestedFix = "Set to nullptr after delete: delete ptr; ptr = nullptr;"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectObjectiveCBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Messaging nil object
+        if (contentLower.Contains("[") && contentLower.Contains("]") && !contentLower.Contains("if"))
+        {
+            var lineNum = FindLineContaining(lines, "\\[.*\\]", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Unhandled Nil Object",
+                Description = "Sending message to potentially nil object without checking",
+                RootCause = "Objective-C silently ignores messages to nil, can hide bugs",
+                Impact = "Silent failures, unexpected behavior, difficult debugging",
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Object becomes nil unexpectedly",
+                    "Message sent to nil",
+                    "Operation silently fails with no feedback"
+                },
+                SuggestedFix = "Check for nil: if (object != nil) { [object method]; } else { handle_nil_case(); }"
+            });
+        }
+
+        return bugs;
+    }
+
+    #endregion
+
+    #region JVM Languages Bugs
+
+    private List<Bug> DetectKotlinBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. NullPointerException from !!
+        if (content.Contains("!!"))
+        {
+            var lineNum = FindLineContaining(lines, "!!", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "NullPointerException from !! Operator",
+                Description = "Not-null assertion operator (!!) throws NPE if value is null",
+                RootCause = "Using !! without ensuring value is actually non-null",
+                Impact = "Runtime crash with NullPointerException",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Variable becomes null unexpectedly",
+                    "!! operator asserts non-null",
+                    "NPE thrown at runtime"
+                },
+                SuggestedFix = "Use safe call: value?.method() or provide default: value ?: defaultValue"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectScalaBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. NullPointerException from null usage
+        if (content.Contains("null"))
+        {
+            var lineNum = FindLineContaining(lines, "null", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "NullPointerException Risk",
+                Description = "Using null defeats Scala's Option type safety",
+                RootCause = "null used instead of Option[T]",
+                Impact = "Runtime NullPointerException",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "null value assigned or returned",
+                    "Code attempts to use value",
+                    "NPE thrown at runtime"
+                },
+                SuggestedFix = "Use Option: def findUser(id: Int): Option[User]; then use .getOrElse, .map, .flatMap"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectGroovyBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Dynamic typing issues
+        if (!contentLower.Contains("@compilestatic"))
+        {
+            var lineNum = random.Next(1, Math.Max(2, lines.Length));
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Runtime Type Error",
+                Description = "Dynamic typing can cause runtime errors that static typing would catch",
+                RootCause = "No compile-time type checking without @CompileStatic",
+                Impact = "Runtime errors for type mismatches that could be caught at compile time",
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Pass wrong type to method",
+                    "Compile succeeds without warnings",
+                    "Runtime error when code executes"
+                },
+                SuggestedFix = "Use @CompileStatic: @groovy.transform.CompileStatic class MyClass { ... }"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectClojureBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Missing nil checks
+        if (contentLower.Contains("get") && !contentLower.Contains("if-let") && !contentLower.Contains("when-let"))
+        {
+            var lineNum = FindLineContaining(lines, "get", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "NullPointerException on Nil",
+                Description = "Accessing nested data without nil checks can cause NPE",
+                RootCause = "get/get-in called without checking for nil values",
+                Impact = "Runtime NullPointerException",
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Data structure contains nil",
+                    "Attempt to access nested value",
+                    "NPE thrown"
+                },
+                SuggestedFix = "Use safe navigation: (when-let [value (get-in data [:key])] (use value))"
+            });
+        }
+
+        return bugs;
+    }
+
+    #endregion
+
+    #region Web Languages Bugs
+
+    private List<Bug> DetectPHPBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. SQL Injection
+        if ((contentLower.Contains("select") || contentLower.Contains("insert")) && content.Contains("$"))
+        {
+            var lineNum = FindLineContaining(lines, "SELECT|INSERT|\\$", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "SQL Injection Vulnerability",
+                Description = "Direct variable interpolation in SQL allows SQL injection attacks",
+                RootCause = "User input concatenated directly into SQL without sanitization",
+                Impact = "Critical security vulnerability - data breach, data loss, unauthorized access",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "User inputs malicious SQL: '; DROP TABLE users--",
+                    "SQL executes injected code",
+                    "Database compromised"
+                },
+                SuggestedFix = "Use prepared statements: $stmt = $pdo->prepare('SELECT * FROM users WHERE id = :id'); $stmt->execute(['id' => $id]);"
+            });
+        }
+
+        // 2. XSS vulnerability
+        if (contentLower.Contains("echo") && content.Contains("$") && !contentLower.Contains("htmlspecialchars"))
+        {
+            var lineNum = FindLineContaining(lines, "echo.*\\$", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Cross-Site Scripting (XSS) Vulnerability",
+                Description = "Echoing user input without sanitization allows XSS attacks",
+                RootCause = "Output not escaped before rendering in HTML",
+                Impact = "XSS attacks can steal cookies, session tokens, execute malicious scripts",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "User inputs <script>alert('XSS')</script>",
+                    "PHP echoes unsanitized input",
+                    "Script executes in victim's browser"
+                },
+                SuggestedFix = "Escape output: echo htmlspecialchars($userInput, ENT_QUOTES, 'UTF-8');"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectRubyBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Mass assignment vulnerability
+        if (contentLower.Contains(".new(params") || contentLower.Contains(".update(params"))
+        {
+            var lineNum = FindLineContaining(lines, "\\.new\\(params|\\.update\\(params", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Mass Assignment Vulnerability",
+                Description = "Allowing all parameters can let attackers modify protected attributes",
+                RootCause = "Using params hash directly without filtering",
+                Impact = "Security breach - unauthorized attribute modification",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Attacker adds unauthorized parameter (e.g., admin=true)",
+                    "Model accepts all params",
+                    "Protected attribute modified"
+                },
+                SuggestedFix = "Use strong parameters: User.new(user_params) with def user_params; params.require(:user).permit(:name, :email); end"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectVueBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Memory leak from event listeners
+        if (contentLower.Contains("addeventlistener") && !contentLower.Contains("removeeventlistener"))
+        {
+            var lineNum = FindLineContaining(lines, "addEventListener", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Memory Leak - Event Listeners Not Removed",
+                Description = "Event listeners not removed in beforeDestroy hook cause memory leaks",
+                RootCause = "Adding event listeners without cleanup",
+                Impact = "Memory leaks, performance degradation over time",
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Component adds event listener in mounted()",
+                    "Component destroyed without cleanup",
+                    "Event listener remains, leaking memory"
+                },
+                SuggestedFix = "Remove in beforeDestroy: beforeDestroy() { window.removeEventListener('resize', this.handler); }"
+            });
+        }
+
+        return bugs;
+    }
+
+    #endregion
+
+    #region Systems Languages Bugs
+
+    private List<Bug> DetectGoBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Goroutine leak
+        if (contentLower.Contains("go ") && !contentLower.Contains("context"))
+        {
+            var lineNum = FindLineContaining(lines, "go ", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Goroutine Leak",
+                Description = "Goroutine without cancellation mechanism can leak if parent exits",
+                RootCause = "No context or done channel to signal goroutine termination",
+                Impact = "Resource leak, goroutines accumulate, memory exhaustion",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Launch goroutine without cancellation",
+                    "Parent function returns",
+                    "Goroutine continues indefinitely, leaking"
+                },
+                SuggestedFix = "Use context: go func(ctx context.Context) { select { case <-ctx.Done(): return; ... } }(ctx)"
+            });
+        }
+
+        // 2. Data race
+        if (contentLower.Contains("go ") && !contentLower.Contains("mutex") && !contentLower.Contains("chan"))
+        {
+            var lineNum = FindLineContaining(lines, "go ", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Data Race - Concurrent Access Without Synchronization",
+                Description = "Multiple goroutines accessing shared data without synchronization",
+                RootCause = "No mutex or channel for coordinating access",
+                Impact = "Race conditions, data corruption, unpredictable behavior",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Multiple goroutines access same variable",
+                    "No synchronization mechanism",
+                    "Run with -race flag: data race detected"
+                },
+                SuggestedFix = "Use mutex: var mu sync.Mutex; mu.Lock(); /* access data */; mu.Unlock(); or use channels"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectRustBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Panic from unwrap
+        if (contentLower.Contains(".unwrap()"))
+        {
+            var lineNum = FindLineContaining(lines, "\\.unwrap\\(\\)", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Panic from unwrap()",
+                Description = "unwrap() panics if Result is Err or Option is None",
+                RootCause = "Using unwrap() without ensuring value is Ok/Some",
+                Impact = "Program crash with panic",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Function returns Err or None",
+                    "unwrap() called",
+                    "Program panics and crashes"
+                },
+                SuggestedFix = "Use ? operator: let value = result?; or match: match result { Ok(v) => v, Err(e) => return Err(e) }"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectSwiftBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Force unwrap crash
+        if (content.Contains("!") && !contentLower.Contains("guard") && !contentLower.Contains("if let"))
+        {
+            var lineNum = FindLineContaining(lines, "!", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Crash from Force Unwrapping nil",
+                Description = "Force unwrapping (!) crashes if optional is nil",
+                RootCause = "Using ! without ensuring optional has value",
+                Impact = "App crash with fatal error",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Optional becomes nil",
+                    "Force unwrap with !",
+                    "App crashes: Fatal error: Unexpectedly found nil"
+                },
+                SuggestedFix = "Use optional binding: if let value = optional { use value } or guard let value = optional else { return }"
+            });
+        }
+
+        return bugs;
+    }
+
+    #endregion
+
+    #region Functional Languages Bugs
+
+    private List<Bug> DetectFSharpBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. NullReferenceException from mutable
+        if (contentLower.Contains("mutable"))
+        {
+            var lineNum = FindLineContaining(lines, "mutable", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "NullReferenceException from Mutable State",
+                Description = "Mutable values can become null, causing NullReferenceException",
+                RootCause = "Using mutable values without null checks",
+                Impact = "Runtime NullReferenceException",
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Mutable value set to null",
+                    "Code accesses value",
+                    "NullReferenceException thrown"
+                },
+                SuggestedFix = "Use immutable and Option: let value: Option<int> = Some 10"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectHaskellBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Exception from partial functions
+        if (contentLower.Contains("head") || contentLower.Contains("tail"))
+        {
+            var lineNum = FindLineContaining(lines, "head|tail", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Exception from Partial Function on Empty List",
+                Description = "head/tail throw exception on empty lists",
+                RootCause = "Using partial functions without checking for empty list",
+                Impact = "Runtime exception and program crash",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Function receives empty list",
+                    "head or tail called",
+                    "Exception: Prelude.head: empty list"
+                },
+                SuggestedFix = "Use safe alternatives: listToMaybe, pattern matching: case xs of (x:_) -> x; [] -> defaultValue"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectElixirBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. BadMatchError from pattern matching
+        if (contentLower.Contains("=") && contentLower.Contains("{:ok,"))
+        {
+            var lineNum = FindLineContaining(lines, "\\{:ok,", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "BadMatchError from Unhandled Pattern",
+                Description = "Pattern match expects {:ok, value} but may receive {:error, reason}",
+                RootCause = "Not handling all possible return patterns",
+                Impact = "Runtime crash with BadMatchError",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Function returns {:error, reason}",
+                    "Code expects {:ok, value}",
+                    "BadMatchError raised"
+                },
+                SuggestedFix = "Handle both patterns: case result do {:ok, value} -> ...; {:error, reason} -> ...; end"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectErlangBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Unhandled message causing mailbox overflow
+        if (contentLower.Contains("receive") && !content.Contains("_"))
+        {
+            var lineNum = FindLineContaining(lines, "receive", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Mailbox Overflow from Unhandled Messages",
+                Description = "Messages not matching any pattern accumulate in mailbox",
+                RootCause = "No catch-all pattern in receive block",
+                Impact = "Memory leak, process slowdown, eventual crash",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Unexpected messages sent to process",
+                    "No pattern matches in receive",
+                    "Messages accumulate infinitely"
+                },
+                SuggestedFix = "Add catch-all: receive {expected, Data} -> handle(Data); _ -> ok end."
+            });
+        }
+
+        return bugs;
+    }
+
+    #endregion
+
+    #region Mobile Bugs
+
+    private List<Bug> DetectDartBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Null safety violation
+        if (content.Contains("!") && !contentLower.Contains("?"))
+        {
+            var lineNum = FindLineContaining(lines, "!", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Null Check Failure",
+                Description = "Null assertion operator (!) fails if value is null",
+                RootCause = "Using ! without ensuring value is non-null",
+                Impact = "Runtime crash with Null check operator used on a null value",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Variable becomes null",
+                    "! operator asserts non-null",
+                    "App crashes with null check error"
+                },
+                SuggestedFix = "Use null-aware operators: value?.method() or if (value != null) { value.method() }"
+            });
+        }
+
+        return bugs;
+    }
+
+    #endregion
+
+    #region Scripting Languages Bugs
+
+    private List<Bug> DetectShellBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Command injection
+        if (content.Contains("$") && (contentLower.Contains("eval") || contentLower.Contains("exec")))
+        {
+            var lineNum = FindLineContaining(lines, "eval|exec", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Command Injection Vulnerability",
+                Description = "Executing user input in eval/exec allows arbitrary command execution",
+                RootCause = "User input passed to eval or exec without sanitization",
+                Impact = "Critical security vulnerability - arbitrary code execution",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "User inputs malicious command: ; rm -rf /",
+                    "eval/exec executes injected command",
+                    "System compromised"
+                },
+                SuggestedFix = "Avoid eval/exec with user input; validate and sanitize all inputs; use safe alternatives"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectPowerShellBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Script injection
+        if (content.Contains("$") && (contentLower.Contains("invoke-expression") || contentLower.Contains("iex")))
+        {
+            var lineNum = FindLineContaining(lines, "Invoke-Expression|iex", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Script Injection via Invoke-Expression",
+                Description = "Invoke-Expression with user input allows arbitrary code execution",
+                RootCause = "Using Invoke-Expression (or iex) with unsanitized input",
+                Impact = "Critical security vulnerability - arbitrary PowerShell code execution",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "User provides malicious input",
+                    "Invoke-Expression executes it",
+                    "Arbitrary code runs with script privileges"
+                },
+                SuggestedFix = "Avoid Invoke-Expression; use cmdlets directly; validate/sanitize all input"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectLuaBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Global variable collision
+        if (!contentLower.Contains("local") && contentLower.Contains("="))
+        {
+            var lineNum = FindLineContaining(lines, "=", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Global Variable Collision",
+                Description = "Global variables can collide across modules causing bugs",
+                RootCause = "Not using 'local' keyword for variables",
+                Impact = "Unexpected variable overwrites, hard-to-debug issues",
+                Severity = SeverityLevel.Medium,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Two modules use same global variable name",
+                    "One module overwrites other's variable",
+                    "Unexpected behavior occurs"
+                },
+                SuggestedFix = "Use local variables: local myVar = 10"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectPerlBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Bareword warnings
+        if (!contentLower.Contains("use strict"))
+        {
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, 1);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Bareword Issues Without strict",
+                Description = "Without 'use strict', barewords can cause subtle bugs",
+                RootCause = "Not using strict pragma",
+                Impact = "Typos in variable names create new variables instead of errors",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Typo in variable name: $usr instead of $user",
+                    "Creates new variable instead of error",
+                    "Logic bug with undefined variable"
+                },
+                SuggestedFix = "Add at top: use strict; use warnings;"
+            });
+        }
+
+        return bugs;
+    }
+
+    #endregion
+
+    #region Data Science Bugs
+
+    private List<Bug> DetectRBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Factor conversion issues
+        if (contentLower.Contains("as.numeric") && contentLower.Contains("factor"))
+        {
+            var lineNum = FindLineContaining(lines, "as\\.numeric.*factor|factor.*as\\.numeric", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Incorrect Factor to Numeric Conversion",
+                Description = "Using as.numeric() on factors returns level indices, not values",
+                RootCause = "Direct conversion of factor to numeric",
+                Impact = "Data corruption, incorrect statistical results",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Factor levels: \"low\", \"medium\", \"high\"",
+                    "as.numeric(factor) returns 1, 2, 3 instead of actual values",
+                    "Incorrect calculations result"
+                },
+                SuggestedFix = "Convert correctly: as.numeric(as.character(factor_var))"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectJuliaBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Type instability causing performance
+        if (contentLower.Contains("global") || (!contentLower.Contains("::") && contentLower.Contains("function")))
+        {
+            var lineNum = FindLineContaining(lines, "global|function", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Type Instability Performance Bug",
+                Description = "Type-unstable code runs 10-100x slower in Julia",
+                RootCause = "Variables change types or lack type annotations",
+                Impact = "Severe performance degradation",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Function with type-unstable variables",
+                    "Julia can't optimize due to type uncertainty",
+                    "Code runs extremely slowly"
+                },
+                SuggestedFix = "Add type annotations: function process(x::Float64)::Float64; avoid global variables in tight loops"
+            });
+        }
+
+        return bugs;
+    }
+
+    #endregion
+
+    #region .NET Bugs
+
+    private List<Bug> DetectVBNetBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Late binding without Option Strict
+        if (!contentLower.Contains("option strict on"))
+        {
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, 1);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Late Binding Errors Without Option Strict",
+                Description = "Without Option Strict, type errors become runtime exceptions",
+                RootCause = "Option Strict not enabled",
+                Impact = "Type mismatches cause runtime errors instead of compile-time errors",
+                Severity = SeverityLevel.High,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Assign wrong type to variable",
+                    "Compiles successfully",
+                    "Runtime exception when code executes"
+                },
+                SuggestedFix = "Add at top of file: Option Strict On"
+            });
+        }
+
+        return bugs;
+    }
+
+    #endregion
+
+    #region Blockchain Bugs
+
+    private List<Bug> DetectSolidityBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Reentrancy attack vulnerability
+        if (contentLower.Contains("call{value:") && !contentLower.Contains("nonreentrant"))
+        {
+            var lineNum = FindLineContaining(lines, "call\\{value:", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Reentrancy Attack Vulnerability",
+                Description = "External call before state update allows reentrancy attacks",
+                RootCause = "State updated after external call (violates Checks-Effects-Interactions)",
+                Impact = "Critical - attacker can drain contract funds (like DAO hack)",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Contract calls external address",
+                    "External contract calls back into original",
+                    "State not yet updated -> can withdraw multiple times"
+                },
+                SuggestedFix = "Update state BEFORE external call, or use ReentrancyGuard modifier from OpenZeppelin"
+            });
+        }
+
+        // 2. Integer overflow/underflow
+        if ((content.Contains("+") || content.Contains("-")) && !contentLower.Contains("safemath") && !content.Contains("unchecked"))
+        {
+            var lineNum = FindLineContaining(lines, "\\+|-", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Integer Overflow/Underflow (pre-0.8.0)",
+                Description = "Arithmetic operations can overflow/underflow without SafeMath",
+                RootCause = "Using arithmetic without overflow checks (Solidity < 0.8.0)",
+                Impact = "Critical - can manipulate balances, bypass checks",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "uint256 balance = 0",
+                    "balance -= 1 (underflows to 2^256-1)",
+                    "Now has maximum balance"
+                },
+                SuggestedFix = "Use Solidity >= 0.8.0 (built-in checks) or import SafeMath library for older versions"
+            });
+        }
+
+        return bugs;
+    }
+
+    #endregion
+
+    #region Markup Languages Bugs
+
+    private List<Bug> DetectXMLBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. XML External Entity (XXE) injection
+        if (contentLower.Contains("<!entity"))
+        {
+            var lineNum = FindLineContaining(lines, "<!ENTITY", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "XML External Entity (XXE) Injection Risk",
+                Description = "External entities can be exploited to read files or perform SSRF attacks",
+                RootCause = "XML parser allows external entity processing",
+                Impact = "Security vulnerability - file disclosure, SSRF, DoS",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Attacker provides XML with external entity",
+                    "Parser processes external reference",
+                    "Sensitive files exposed or SSRF executed"
+                },
+                SuggestedFix = "Disable external entities in XML parser settings; validate and sanitize XML input"
+            });
+        }
+
+        return bugs;
+    }
+
+    private List<Bug> DetectYAMLBugs(CodeFile file, string content, string contentLower, string[] lines, Random random)
+    {
+        var bugs = new List<Bug>();
+
+        // 1. Unsafe YAML deserialization
+        if (contentLower.Contains("load(") && !contentLower.Contains("safeload"))
+        {
+            var lineNum = FindLineContaining(lines, "load\\(", random);
+            var (snippet, startLine, endLine) = GetCodeSnippetWithRange(lines, lineNum);
+            bugs.Add(new Bug
+            {
+                FilePath = file.FilePath,
+                LineNumber = startLine,
+                EndLineNumber = endLine,
+                Title = "Unsafe YAML Deserialization",
+                Description = "yaml.load() can execute arbitrary code; use safe_load()",
+                RootCause = "Using yaml.load() instead of yaml.safe_load()",
+                Impact = "Critical security vulnerability - arbitrary code execution",
+                Severity = SeverityLevel.Critical,
+                CodeSnippet = snippet,
+                ReproductionSteps = new List<string>
+                {
+                    "Attacker provides YAML with Python objects",
+                    "yaml.load() deserializes and executes",
+                    "Arbitrary code runs on server"
+                },
+                SuggestedFix = "Use safe_load: yaml.safe_load(data) instead of yaml.load(data)"
+            });
+        }
+
+        return bugs;
+    }
+
+    #endregion
+
+    #endregion
 
     /// <summary>
     /// Extracts code snippet with intelligent context detection
@@ -1765,7 +5382,7 @@ duplicatedCode, locations (array with filePath, startLine, endLine, methodName, 
         string? connectionId = null)
     {
         await SendProgress(connectionId, 7, "Step 1: Analyzing project structure - Scanning folders and files...");
-        
+
         // Initialize project context
         _projectContext = new ProjectContext
         {
@@ -1773,13 +5390,13 @@ duplicatedCode, locations (array with filePath, startLine, endLine, methodName, 
             TotalLines = files.Sum(f => f.LineCount),
             ProjectName = DetectProjectName(files, folderStructure)
         };
-        
+
         await SendProgress(connectionId, 10, $"Found {_projectContext.TotalFiles} files with {_projectContext.TotalLines:N0} lines of code");
-        
+
         // Step 1.1: Analyze folder structure and identify modules
         await SendProgress(connectionId, 12, "Analyzing folder structure and detecting project modules...");
         AnalyzeModulesAndStructure(files, folderStructure);
-        
+
         // Step 1.2: Map file languages
         await SendProgress(connectionId, 14, "Mapping file types and languages...");
         foreach (var file in files)
@@ -1788,23 +5405,23 @@ duplicatedCode, locations (array with filePath, startLine, endLine, methodName, 
             var language = GetLanguageName(extension);
             _projectContext.FileLanguageMap[file.FilePath] = language;
         }
-        
+
         // Step 1.3: Analyze file dependencies and connections
         await SendProgress(connectionId, 16, "Analyzing file dependencies and connections between components...");
         AnalyzeFileDependencies(files);
-        
+
         // Step 1.4: Detect coding patterns used in the project
         await SendProgress(connectionId, 18, "Detecting coding standards and patterns used in the project...");
         DetectCodingPatterns(files);
-        
+
         // Step 1.5: Analyze error handling approach
         await SendProgress(connectionId, 19, "Analyzing error handling strategies across the project...");
         AnalyzeErrorHandling(files);
-        
+
         // Step 1.6: Build comprehensive method and API inventory
         await SendProgress(connectionId, 20, "Building complete inventory of methods, APIs, and database queries...");
         BuildMethodInventory(files);
-        
+
         await SendProgress(connectionId, 22, $"Project analysis complete: {_projectContext.Modules.Count} modules detected");
 
         var provider = _configuration["AI:Provider"] ?? "Demo";
@@ -2609,7 +6226,7 @@ Provide a detailed analysis including:
         {
             return Path.GetFileNameWithoutExtension(slnFile.FilePath);
         }
-        
+
         // Check for package.json
         var packageJson = files.FirstOrDefault(f => f.FilePath.EndsWith("package.json"));
         if (packageJson != null && packageJson.Content.Contains("\"name\":"))
@@ -2620,7 +6237,7 @@ Provide a detailed analysis including:
                 return match.Groups[1].Value;
             }
         }
-        
+
         // Fallback to root folder name
         var rootFolder = folderStructure.Keys.FirstOrDefault() ?? "UnknownProject";
         return Path.GetFileName(rootFolder);
@@ -2632,7 +6249,7 @@ Provide a detailed analysis including:
     private void AnalyzeModulesAndStructure(List<CodeFile> files, Dictionary<string, int> folderStructure)
     {
         var modules = new List<ProjectModule>();
-        
+
         // Group files by top-level folders
         var folderGroups = files.GroupBy(f =>
         {
@@ -2644,14 +6261,14 @@ Provide a detailed analysis including:
         {
             var folderName = group.Key;
             var moduleFiles = group.ToList();
-            
+
             var module = new ProjectModule
             {
                 Name = folderName,
                 Path = folderName,
                 Files = moduleFiles.Select(f => f.FilePath).ToList()
             };
-            
+
             // Detect module type
             if (folderName.Contains("API", StringComparison.OrdinalIgnoreCase) ||
                 folderName.Contains("Server", StringComparison.OrdinalIgnoreCase) ||
@@ -2688,10 +6305,10 @@ Provide a detailed analysis including:
                 module.Type = "Library";
                 module.Purpose = "Supporting module";
             }
-            
+
             modules.Add(module);
         }
-        
+
         _projectContext!.Modules = modules;
         _projectContext.FolderStructure = folderStructure;
     }
@@ -2705,7 +6322,7 @@ Provide a detailed analysis including:
         {
             var dependencies = new List<string>();
             var extension = Path.GetExtension(file.FilePath).ToLowerInvariant();
-            
+
             if (extension == ".cs")
             {
                 // C# using statements
@@ -2718,7 +6335,7 @@ Provide a detailed analysis including:
                 var matches = System.Text.RegularExpressions.Regex.Matches(file.Content, @"import\s+.*from\s+['""]([^'""]+)['""]");
                 dependencies.AddRange(matches.Cast<System.Text.RegularExpressions.Match>().Select(m => m.Groups[1].Value.Trim()));
             }
-            
+
             if (dependencies.Any())
             {
                 _projectContext!.FileDependencies[file.FilePath] = dependencies;
@@ -2732,32 +6349,32 @@ Provide a detailed analysis including:
     private void DetectCodingPatterns(List<CodeFile> files)
     {
         var patterns = new Dictionary<string, string>();
-        
+
         // Naming conventions
         var hasPascalCase = files.Any(f => System.Text.RegularExpressions.Regex.IsMatch(f.Content, @"(public|private|protected)\s+class\s+[A-Z][a-z]+"));
         var hasCamelCase = files.Any(f => System.Text.RegularExpressions.Regex.IsMatch(f.Content, @"(let|const|var)\s+[a-z][a-zA-Z]+"));
-        
+
         if (hasPascalCase) patterns["C# Class Naming"] = "PascalCase for classes";
         if (hasCamelCase) patterns["JavaScript Variable Naming"] = "camelCase for variables";
-        
+
         // Dependency injection pattern
         var hasDI = files.Any(f => f.Content.Contains("constructor") && f.Content.Contains("private readonly"));
         if (hasDI) patterns["Dependency Injection"] = "Constructor injection pattern detected";
-        
+
         // Async pattern
         var hasAsync = files.Any(f => f.Content.Contains("async") && f.Content.Contains("await"));
         if (hasAsync) patterns["Asynchronous Programming"] = "async/await pattern used";
-        
+
         // Repository pattern
         var hasRepository = files.Any(f => f.FilePath.Contains("Repository") || f.Content.Contains("IRepository"));
         if (hasRepository) patterns["Repository Pattern"] = "Data access through repositories";
-        
+
         _projectContext!.CodingPatterns = patterns;
-        
+
         // Detect architectural pattern
         var hasCleanArchitecture = files.Any(f => f.FilePath.Contains("Domain") || f.FilePath.Contains("Application") || f.FilePath.Contains("Infrastructure"));
-        _projectContext.ArchitecturalPattern = hasCleanArchitecture 
-            ? "Clean Architecture (Domain-Driven Design)" 
+        _projectContext.ArchitecturalPattern = hasCleanArchitecture
+            ? "Clean Architecture (Domain-Driven Design)"
             : "Standard Layered Architecture";
     }
 
@@ -2767,11 +6384,11 @@ Provide a detailed analysis including:
     private void AnalyzeErrorHandling(List<CodeFile> files)
     {
         var approaches = new List<string>();
-        
+
         foreach (var file in files)
         {
             var extension = Path.GetExtension(file.FilePath).ToLowerInvariant();
-            
+
             if (extension == ".cs")
             {
                 if (file.Content.Contains("try") && file.Content.Contains("catch"))
@@ -2806,7 +6423,7 @@ Provide a detailed analysis including:
                 }
             }
         }
-        
+
         _projectContext!.ErrorHandlingApproach = string.Join("; ", approaches.Distinct().Take(5));
     }
 
@@ -2819,7 +6436,7 @@ Provide a detailed analysis including:
         {
             var extension = Path.GetExtension(file.FilePath).ToLowerInvariant();
             var methods = new List<string>();
-            
+
             // API Controllers (C#)
             if (file.FilePath.Contains("Controller") && extension == ".cs")
             {
@@ -2827,7 +6444,7 @@ Provide a detailed analysis including:
                     file.Content,
                     @"\[(HttpGet|HttpPost|HttpPut|HttpDelete|HttpPatch)\(""([^""]*)""\)\][\s\S]*?public\s+(?:async\s+)?(?:Task<)?(?:IActionResult|ActionResult).*?\s+(\w+)\("
                 );
-                
+
                 foreach (System.Text.RegularExpressions.Match match in apiMatches)
                 {
                     var httpMethod = match.Groups[1].Value;
@@ -2836,7 +6453,7 @@ Provide a detailed analysis including:
                     _projectContext!.ApiEndpoints[$"{httpMethod} {route}"] = $"{file.FilePath}::{methodName}";
                 }
             }
-            
+
             // Services (C#)
             if (file.FilePath.Contains("Service") && extension == ".cs")
             {
@@ -2844,14 +6461,14 @@ Provide a detailed analysis including:
                     file.Content,
                     @"public\s+(?:async\s+)?(?:Task<[^>]+>|[^\s]+)\s+(\w+)\([^)]*\)"
                 );
-                
+
                 foreach (System.Text.RegularExpressions.Match match in serviceMatches)
                 {
                     var methodName = match.Groups[1].Value;
                     _projectContext!.ServiceMethods[methodName] = file.FilePath;
                 }
             }
-            
+
             // SQL Stored Procedures
             if (extension == ".sql")
             {
@@ -2860,14 +6477,14 @@ Provide a detailed analysis including:
                     @"CREATE\s+PROCEDURE\s+\[?([^\]\s]+)\]?",
                     System.Text.RegularExpressions.RegexOptions.IgnoreCase
                 );
-                
+
                 foreach (System.Text.RegularExpressions.Match match in spMatches)
                 {
                     var spName = match.Groups[1].Value;
                     _projectContext!.DataLayerQueries[spName] = file.FilePath;
                 }
             }
-            
+
             // Store all methods for the file
             if (methods.Any())
             {

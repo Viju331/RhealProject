@@ -110,4 +110,48 @@ public class AnalysisController : ControllerBase
             return StatusCode(500, new { error = "Failed to export report" });
         }
     }
+
+    /// <summary>
+    /// View HTML report in browser
+    /// </summary>
+    [HttpGet("report/{reportId}/html")]
+    public async Task<IActionResult> ViewHtmlReport(string reportId)
+    {
+        try
+        {
+            var htmlContent = await _reportService.GenerateHtmlReportAsync(reportId);
+            return Content(htmlContent, "text/html");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating HTML report");
+            return StatusCode(500, new { error = "Failed to generate HTML report" });
+        }
+    }
+
+    /// <summary>
+    /// Download HTML report as file
+    /// </summary>
+    [HttpGet("report/{reportId}/export/html")]
+    public async Task<IActionResult> DownloadHtmlReport(string reportId)
+    {
+        try
+        {
+            var htmlBytes = await _reportService.ExportReportToHtmlAsync(reportId);
+            return File(htmlBytes, "text/html", $"RhealAI-Report-{reportId}-{DateTime.Now:yyyyMMdd-HHmmss}.html");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting HTML report");
+            return StatusCode(500, new { error = "Failed to export HTML report" });
+        }
+    }
 }

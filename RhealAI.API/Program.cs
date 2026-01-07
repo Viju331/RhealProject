@@ -50,6 +50,9 @@ builder.Services.AddScoped<IAIAnalysisService, AIAnalysisService>();
 builder.Services.AddScoped<IProgressHub, SignalRProgressHub>();
 builder.Services.AddScoped<IReportService, ReportService>();
 
+// Register background services
+builder.Services.AddHostedService<CacheCleanupService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline

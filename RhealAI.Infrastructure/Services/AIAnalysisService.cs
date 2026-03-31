@@ -849,14 +849,17 @@ BEFORE suggesting, verify syntax matches the Language field!"),
             var progressBase = 95 + (languageCount - 1) * 2 / totalLanguages;
             await SendProgress(connectionId, progressBase, $"Analyzing {languageName} files for duplications...");
 
-            // Analyze files of the same language together
+            // Analyze files of the same language together - filter out imports for meaningful comparison
             var filesText = string.Join("\n\n", languageFiles.Select(f =>
             {
                 var lang = GetLanguageIdentifier(Path.GetExtension(f.FilePath).ToLowerInvariant());
-                return $"File: {f.FilePath}\nLanguage: {languageName}\n```{lang}\n{f.Content}\n```";
+                var cleanedContent = RemoveImportsAndBoilerplate(f.Content, extension);
+                return $"File: {f.FilePath}\nLanguage: {languageName}\n```{lang}\n{cleanedContent}\n```";
             }));
 
             var prompt = @$"Analyze the following {languageName} code files to detect duplicate or redundant code.
+
+IMPORTANT: The provided code has already had imports, using statements, and package declarations removed. Focus on analyzing the actual business logic and implementation code only.
 
 CRITICAL RULES:
 1. ONLY compare code within these {languageName} files - DO NOT mix languages
@@ -864,6 +867,7 @@ CRITICAL RULES:
 3. All file paths in locations must be from the files provided below
 4. The 'duplicatedCode' field MUST contain actual {languageName} code from these files
 5. Verify syntax: SQL files must show SQL code (BEGIN/END, DECLARE), C# files must show C# code (try/catch, var), TypeScript files must show TS code (const/let, async/await)
+6. Ignore any remaining boilerplate or framework code - focus on business logic, methods, and functions
 
 LANGUAGE-SPECIFIC DUPLICATION EXAMPLES FOR {languageName}:
 
@@ -998,7 +1002,10 @@ duplicatedCode, locations (array with filePath, startLine, endLine, methodName, 
 
         foreach (var file in filteredFiles)
         {
-            var lines = file.Content.Split(new[] { '\r', '\n' }, StringSplitOptions.None);
+            // Remove imports and boilerplate before analyzing
+            var extension = Path.GetExtension(file.FilePath).ToLowerInvariant();
+            var cleanedContent = RemoveImportsAndBoilerplate(file.Content, extension);
+            var lines = cleanedContent.Split(new[] { '\r', '\n' }, StringSplitOptions.None);
 
             // Extract code blocks of varying sizes
             for (int blockSize = minBlockSize; blockSize <= Math.Min(20, lines.Length); blockSize++)
@@ -1124,6 +1131,18 @@ duplicatedCode, locations (array with filePath, startLine, endLine, methodName, 
                 trimmed.StartsWith("*/") ||
                 trimmed.StartsWith("#") ||
                 trimmed.StartsWith("<!--"))
+                continue;
+
+            // Skip import/using/require statements that might have slipped through
+            if (trimmed.StartsWith("using ") ||
+                trimmed.StartsWith("import ") ||
+                trimmed.StartsWith("from ") ||
+                trimmed.StartsWith("require(") ||
+                trimmed.StartsWith("export ") ||
+                trimmed.StartsWith("namespace ") ||
+                trimmed.StartsWith("package ") ||
+                trimmed.Contains("from '") ||
+                trimmed.Contains("from \""))
                 continue;
 
             // Remove inline comments
@@ -6491,6 +6510,133 @@ Provide a detailed analysis including:
                 _projectContext!.MethodInventory[file.FilePath] = methods;
             }
         }
+    }
+
+    /// <summary>
+    /// Removes imports, using statements, package declarations, and other boilerplate from code
+    /// to focus duplication detection on actual business logic
+    /// </summary>
+    private string RemoveImportsAndBoilerplate(string content, string extension)
+    {
+        var lines = content.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        var filteredLines = new List<string>();
+
+        foreach (var line in lines)
+        {
+            var trimmedLine = line.Trim();
+
+            // Skip empty lines
+            if (string.IsNullOrWhiteSpace(trimmedLine))
+                continue;
+
+            // C# - Skip using statements, namespace declarations, and common attributes
+            if (extension == ".cs")
+            {
+                if (trimmedLine.StartsWith("using ") ||
+                    trimmedLine.StartsWith("namespace ") ||
+                    trimmedLine.StartsWith("[assembly:") ||
+                    trimmedLine.StartsWith("[ApiController]") ||
+                    trimmedLine.StartsWith("[Route(") ||
+                    trimmedLine.StartsWith("[Authorize") ||
+                    trimmedLine == "{" && filteredLines.Count < 3) // Skip opening brace of namespace
+                {
+                    continue;
+                }
+            }
+            // JavaScript/TypeScript - Skip imports and exports
+            else if (extension == ".js" || extension == ".ts" || extension == ".jsx" || extension == ".tsx")
+            {
+                if (trimmedLine.StartsWith("import ") ||
+                    trimmedLine.StartsWith("export ") ||
+                    trimmedLine.StartsWith("require(") ||
+                    trimmedLine.Contains("from '") ||
+                    trimmedLine.Contains("from \""))
+                {
+                    continue;
+                }
+            }
+            // Java - Skip imports and package declarations
+            else if (extension == ".java")
+            {
+                if (trimmedLine.StartsWith("package ") ||
+                    trimmedLine.StartsWith("import ") ||
+                    trimmedLine.StartsWith("@SpringBootApplication") ||
+                    trimmedLine.StartsWith("@RestController") ||
+                    trimmedLine.StartsWith("@Service"))
+                {
+                    continue;
+                }
+            }
+            // Python - Skip imports
+            else if (extension == ".py")
+            {
+                if (trimmedLine.StartsWith("import ") ||
+                    trimmedLine.StartsWith("from ") && trimmedLine.Contains(" import "))
+                {
+                    continue;
+                }
+            }
+            // Go - Skip imports and package declarations
+            else if (extension == ".go")
+            {
+                if (trimmedLine.StartsWith("package ") ||
+                    trimmedLine.StartsWith("import ") ||
+                    trimmedLine == "import (")
+                {
+                    continue;
+                }
+            }
+            // PHP - Skip use statements and namespace
+            else if (extension == ".php")
+            {
+                if (trimmedLine.StartsWith("use ") ||
+                    trimmedLine.StartsWith("namespace ") ||
+                    trimmedLine.StartsWith("<?php"))
+                {
+                    continue;
+                }
+            }
+            // Ruby - Skip requires
+            else if (extension == ".rb")
+            {
+                if (trimmedLine.StartsWith("require ") ||
+                    trimmedLine.StartsWith("require_relative "))
+                {
+                    continue;
+                }
+            }
+            // Kotlin - Skip imports and package
+            else if (extension == ".kt")
+            {
+                if (trimmedLine.StartsWith("package ") ||
+                    trimmedLine.StartsWith("import "))
+                {
+                    continue;
+                }
+            }
+            // Swift - Skip imports
+            else if (extension == ".swift")
+            {
+                if (trimmedLine.StartsWith("import "))
+                {
+                    continue;
+                }
+            }
+            // Rust - Skip use statements
+            else if (extension == ".rs")
+            {
+                if (trimmedLine.StartsWith("use ") ||
+                    trimmedLine.StartsWith("extern crate "))
+                {
+                    continue;
+                }
+            }
+
+            // Add the line to filtered content
+            filteredLines.Add(line);
+        }
+
+        return string.Join(Environment.NewLine, filteredLines);
     }
 
     #endregion

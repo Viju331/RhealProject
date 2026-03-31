@@ -120,7 +120,8 @@ export class AnalysisResultPageComponent implements OnInit, AfterViewInit {
         this.report = {
           id: reportResponse.id || reportId,
           repositoryId: repositoryId,
-          generatedDate: new Date(reportResponse.generatedAt || Date.now()),
+          repositoryName: reportResponse.repositoryName || this.repository?.name || 'Unknown Repository',
+          generatedAt: new Date(reportResponse.generatedAt || Date.now()),
           totalFiles: reportResponse.totalFiles || 0,
           filesWithViolations: reportResponse.filesWithViolations || 0,
           filesWithBugs: reportResponse.filesWithBugs || 0,
@@ -145,28 +146,28 @@ export class AnalysisResultPageComponent implements OnInit, AfterViewInit {
         };
 
         // Store raw data for lazy loading
-        this.rawViolations = (this.report.violations || []).map((v: any) => ({
+        this.rawViolations = (this.report?.violations || []).map((v: any) => ({
           ...v,
           fullPath: this.formatFilePath(v.filePath || ''),
           fileName: this.extractFileName(v.filePath || ''),
           severity: this.mapSeverity(v.severity)
         }));
 
-        this.rawBugs = (this.report.bugs || []).map((b: any) => ({
+        this.rawBugs = (this.report?.bugs || []).map((b: any) => ({
           ...b,
           fullPath: this.formatFilePath(b.filePath || ''),
           fileName: this.extractFileName(b.filePath || ''),
           severity: this.mapSeverity(b.severity)
         }));
 
-        this.rawRefactorings = (this.report.refactorings || []).map((r: any) => ({
+        this.rawRefactorings = (this.report?.refactorings || []).map((r: any) => ({
           ...r,
           fullPath: this.formatFilePath(r.filePath || ''),
           fileName: this.extractFileName(r.filePath || ''),
           priority: this.mapSeverity(r.priority)
         }));
 
-        this.rawDuplications = (this.report.duplications || []).map((d: any) => ({
+        this.rawDuplications = (this.report?.duplications || []).map((d: any) => ({
           ...d,
           impact: this.mapSeverity(d.impact)
         }));
@@ -196,7 +197,8 @@ export class AnalysisResultPageComponent implements OnInit, AfterViewInit {
         this.report = {
           id: '1',
           repositoryId: repositoryId,
-          generatedDate: new Date(),
+          repositoryName: this.repository?.name || 'Unknown Repository',
+          generatedAt: new Date(),
           totalFiles: this.repository?.files.length || 0,
           filesWithViolations: new Set(this.allViolations.data.map((v: any) => v.fileName)).size,
           filesWithBugs: new Set(this.allBugs.data.map((b: any) => b.fileName)).size,
@@ -221,7 +223,8 @@ export class AnalysisResultPageComponent implements OnInit, AfterViewInit {
       this.report = {
         id: '1',
         repositoryId: repositoryId,
-        generatedDate: new Date(),
+        repositoryName: this.repository?.name || 'Unknown Repository',
+        generatedAt: new Date(),
         totalFiles: this.repository?.files.length || 0,
         filesWithViolations: 0,
         filesWithBugs: 0,

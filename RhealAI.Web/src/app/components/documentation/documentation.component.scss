@@ -1,0 +1,525 @@
+.documentation-container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding-bottom: 4rem;
+}
+
+.doc-hero {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.95) 0%, rgba(118, 75, 162, 0.95) 100%);
+    padding: 4rem 2rem;
+    text-align: center;
+    color: white;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    margin-bottom: 2rem;
+}
+
+.hero-content {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.hero-icon {
+    font-size: 4rem;
+    width: 4rem;
+    height: 4rem;
+    margin-bottom: 1rem;
+    opacity: 0.9;
+}
+
+.hero-title {
+    font-size: 3rem;
+    font-weight: 700;
+    margin: 1rem 0;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.hero-subtitle {
+    font-size: 1.25rem;
+    opacity: 0.95;
+    font-weight: 300;
+}
+
+.doc-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 2rem;
+}
+
+.doc-section {
+    margin-bottom: 4rem;
+}
+
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 2rem;
+    font-weight: 600;
+    color: white;
+    margin-bottom: 2rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 3px solid rgba(255, 255, 255, 0.3);
+
+    mat-icon {
+        font-size: 2rem;
+        width: 2rem;
+        height: 2rem;
+    }
+}
+
+/* Features Grid */
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 2rem;
+}
+
+.feature-card {
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+
+    &:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+    }
+
+    mat-card-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .feature-icon {
+        font-size: 2.5rem;
+        width: 2.5rem;
+        height: 2.5rem;
+    }
+
+    mat-card-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+    }
+
+    mat-card-content {
+        padding: 1.5rem;
+    }
+
+    .feature-description {
+        margin-bottom: 1rem;
+        color: #666;
+        font-size: 1rem;
+    }
+
+    .feature-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+
+        li {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+            color: #333;
+
+            .check-icon {
+                color: #4caf50;
+                font-size: 1.25rem;
+                width: 1.25rem;
+                height: 1.25rem;
+                flex-shrink: 0;
+                margin-top: 2px;
+            }
+        }
+    }
+}
+
+/* Analysis Steps */
+.analysis-accordion {
+    .step-panel {
+        background: white;
+        border-radius: 12px;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+        &:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+    }
+
+    .step-title {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        font-size: 1.1rem;
+    }
+
+    .step-number {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+
+    .step-name {
+        flex: 1;
+        font-weight: 600;
+    }
+
+    .progress-chip {
+        background: #e3f2fd;
+        color: #1976d2;
+        font-weight: 500;
+    }
+
+    .step-content {
+        padding: 1rem;
+    }
+
+    .step-description {
+        color: #666;
+        margin-bottom: 1rem;
+        font-size: 1rem;
+    }
+
+    .detail-list {
+        list-style: none;
+        padding: 0;
+
+        li {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            color: #333;
+
+            .detail-icon {
+                color: #667eea;
+                font-size: 1.25rem;
+                width: 1.25rem;
+                height: 1.25rem;
+                flex-shrink: 0;
+                margin-top: 2px;
+            }
+        }
+    }
+}
+
+/* AI Providers */
+.providers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 2rem;
+}
+
+.provider-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+
+    &:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+    }
+
+    mat-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem;
+        border-bottom: 2px solid #f0f0f0;
+    }
+
+    mat-card-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .free-chip {
+        background: #4caf50;
+        color: white;
+    }
+
+    .paid-chip {
+        background: #ff9800;
+        color: white;
+    }
+
+    mat-card-content {
+        padding: 1.5rem;
+    }
+
+    .provider-description {
+        color: #666;
+        margin-bottom: 1.5rem;
+    }
+
+    .models-section h4 {
+        color: #333;
+        font-size: 1rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .models-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .model-chip {
+        background: #e8eaf6;
+        color: #5c6bc0;
+        font-weight: 500;
+    }
+}
+
+/* Getting Started */
+.getting-started-steps {
+    display: grid;
+    gap: 2rem;
+}
+
+.start-step-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    position: relative;
+    padding-left: 5rem;
+    transition: all 0.3s ease;
+
+    &:hover {
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+    }
+
+    .step-number-badge {
+        position: absolute;
+        left: 1.5rem;
+        top: 1.5rem;
+        width: 3rem;
+        height: 3rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: 700;
+        box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+    }
+
+    mat-card-content {
+        padding: 1.5rem;
+    }
+
+    .start-step-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 0.75rem;
+    }
+
+    .start-step-description {
+        color: #666;
+        margin-bottom: 1rem;
+    }
+
+    .code-block {
+        background: #2d2d2d;
+        color: #f8f8f2;
+        padding: 1rem;
+        border-radius: 8px;
+        overflow-x: auto;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 0.9rem;
+        line-height: 1.5;
+
+        code {
+            white-space: pre;
+        }
+    }
+}
+
+/* Technical Stack */
+.tech-stack-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2rem;
+}
+
+.tech-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+
+    &:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+    }
+
+    mat-card-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem 1.5rem;
+    }
+
+    mat-card-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+
+    mat-card-content {
+        padding: 1.5rem;
+    }
+
+    .tech-items {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .tech-chip {
+        background: #f5f5f5;
+        color: #333;
+        font-weight: 500;
+    }
+}
+
+/* Tips Card */
+.tips-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+
+    mat-card-content {
+        padding: 2rem;
+    }
+
+    .tip-item {
+        display: flex;
+        gap: 1.5rem;
+        padding: 1.5rem;
+        border-radius: 12px;
+        background: #f8f9fa;
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+
+        &:last-child {
+            margin-bottom: 0;
+        }
+
+        &:hover {
+            background: #e9ecef;
+            transform: translateX(8px);
+        }
+
+        .tip-icon {
+            color: #667eea;
+            font-size: 2rem;
+            width: 2rem;
+            height: 2rem;
+            flex-shrink: 0;
+        }
+
+        .tip-content {
+            flex: 1;
+
+            h4 {
+                color: #333;
+                font-size: 1.125rem;
+                font-weight: 600;
+                margin-bottom: 0.5rem;
+            }
+
+            p {
+                color: #666;
+                margin: 0;
+                line-height: 1.6;
+            }
+        }
+    }
+}
+
+/* Configuration Cards */
+.config-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-bottom: 1.5rem;
+
+    &:last-child {
+        margin-bottom: 0;
+    }
+
+    mat-card-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem 1.5rem;
+    }
+
+    mat-card-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+
+    mat-card-content {
+        padding: 1.5rem;
+    }
+
+    .code-block {
+        background: #2d2d2d;
+        color: #f8f8f2;
+        padding: 1.5rem;
+        border-radius: 8px;
+        overflow-x: auto;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        margin: 0;
+
+        code {
+            white-space: pre;
+        }
+    }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .hero-title {
+        font-size: 2rem;
+    }
+
+    .hero-subtitle {
+        font-size: 1rem;
+    }
+
+    .features-grid,
+    .providers-grid,
+    .tech-stack-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .start-step-card {
+        padding-left: 1.5rem;
+
+        .step-number-badge {
+            position: static;
+            margin-bottom: 1rem;
+        }
+    }
+
+    .section-title {
+        font-size: 1.5rem;
+    }
+}

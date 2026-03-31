@@ -43,11 +43,15 @@ builder.Services.AddSingleton<ZipExtractor>();
 builder.Services.AddSingleton<FolderAnalyzer>();
 builder.Services.AddSingleton<GitHubProcessor>();
 builder.Services.AddSingleton<AgentFactory>();
+builder.Services.AddScoped<StandardsGeneratorService>();
 builder.Services.AddScoped<IRepositoryService, RepositoryService>();
 builder.Services.AddScoped<IDocumentationService, DocumentationService>();
 builder.Services.AddScoped<IAIAnalysisService, AIAnalysisService>();
 builder.Services.AddScoped<IProgressHub, SignalRProgressHub>();
 builder.Services.AddScoped<IReportService, ReportService>();
+
+// Register background services
+builder.Services.AddHostedService<CacheCleanupService>();
 
 var app = builder.Build();
 

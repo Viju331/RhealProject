@@ -6,13 +6,17 @@
             <p class="page-subtitle">{{ repository?.name }}</p>
         </div>
         <div class="header-actions">
-            <button mat-raised-button color="primary" [routerLink]="['/standards', repository?.id]">
+            <button mat-raised-button color="primary" [routerLink]="['/reports', report?.id]" *ngIf="report?.id">
+                <mat-icon>description</mat-icon>
+                View HTML Report
+            </button>
+            <button mat-raised-button [routerLink]="['/standards', repository?.id]">
                 <mat-icon>rule</mat-icon>
                 View Standards
             </button>
             <button mat-raised-button (click)="exportReport('json')">
                 <mat-icon>download</mat-icon>
-                Export Report
+                Export JSON
             </button>
         </div>
     </div>

@@ -23,7 +23,8 @@ export interface ProjectSummary {
 export interface AnalysisReport {
     id: string;
     repositoryId: string;
-    generatedDate: Date;
+    repositoryName: string;
+    generatedAt: Date;
     totalFiles: number;
     filesWithViolations: number;
     filesWithBugs: number;

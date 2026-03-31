@@ -27,4 +27,12 @@ export class AnalysisService {
     exportReportPdf(reportId: string): Observable<Blob> {
         return this._http.getDownloadFileAPI(`analysis/report/${reportId}/export/pdf`);
     }
+
+    getHtmlReport(reportId: string): Observable<string> {
+        return this._http.getTextAPI(`analysis/report/${reportId}/html`);
+    }
+
+    exportReportHtml(reportId: string): Observable<Blob> {
+        return this._http.getDownloadFileAPI(`analysis/report/${reportId}/export/html`);
+    }
 }

@@ -4,13 +4,38 @@
 
 .page-header-section {
     @apply flex items-center justify-between mb-8;
+    flex-wrap: wrap;
+    gap: 1rem;
 }
 
 .header-actions {
     @apply flex gap-4;
+    flex-wrap: wrap;
 
     button mat-icon {
         margin-right: 8px;
+    }
+}
+
+.html-report-container {
+    @apply p-0 mb-8;
+    background: transparent;
+    box-shadow: none;
+}
+
+.report-content {
+    // Reset any inherited styles to let the HTML report styles take over
+    all: initial;
+    display: block;
+
+    // Ensure the report content is responsive
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+
+    // Allow the HTML report's own styles to apply
+    * {
+        all: revert;
     }
 }
 

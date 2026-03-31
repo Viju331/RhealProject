@@ -14,8 +14,8 @@ export class HttpOperationsService {
     this.baseUrl = environment.apiUrl;
   }
 
-  public getBaseUrl(): string { 
-    return this.baseUrl; 
+  public getBaseUrl(): string {
+    return this.baseUrl;
   }
 
   public getAPI<T>(url: string, params?: HttpParams): Observable<T> {
@@ -65,6 +65,12 @@ export class HttpOperationsService {
   public getDownloadFileAPI(url: string): Observable<Blob> {
     return this.http.get(`${this.baseUrl}/${url}`, {
       responseType: 'blob'
+    });
+  }
+
+  public getTextAPI(url: string): Observable<string> {
+    return this.http.get(`${this.baseUrl}/${url}`, {
+      responseType: 'text'
     });
   }
 

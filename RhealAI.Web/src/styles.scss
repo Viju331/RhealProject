@@ -21,6 +21,40 @@ $my-theme: mat.m2-define-light-theme((color: (primary: $my-primary,
 @include mat.all-component-themes($my-theme);
 
 // Custom Material Component Overrides
+// Material Dialog Overrides for Scrolling and Sticky Footer
+.mat-mdc-dialog-container {
+  .mdc-dialog__surface {
+    overflow: hidden !important;
+  }
+}
+
+// Custom scrollbar for all scrollable areas
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 8px;
+  border: 2px solid #f1f5f9;
+
+  &:hover {
+    background: #94a3b8;
+  }
+}
+
+// Firefox scrollbar
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
 // Snackbar styling to match purple theme
 .mat-mdc-snack-bar-container {
   &.mat-mdc-snack-bar-container {
@@ -327,6 +361,33 @@ $my-theme: mat.m2-define-light-theme((color: (primary: $my-primary,
     to {
       opacity: 1;
     }
+  }
+}
+
+// Custom Snackbar Styles
+.error-snackbar {
+  background-color: #f44336 !important;
+  color: white !important;
+
+  .mat-mdc-snack-bar-label {
+    color: white !important;
+  }
+
+  .mat-mdc-button {
+    color: white !important;
+  }
+}
+
+.success-snackbar {
+  background-color: #4caf50 !important;
+  color: white !important;
+
+  .mat-mdc-snack-bar-label {
+    color: white !important;
+  }
+
+  .mat-mdc-button {
+    color: white !important;
   }
 }
 
